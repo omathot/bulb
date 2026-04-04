@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 4.0)
 set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "451f2fe2-a8a2-47c3-bc32-94786d8fc91b")
-project(werk VERSION 1.0 LANGUAGES CXX)
+project(bulb VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 23)
@@ -50,6 +50,14 @@ target_link_options(${PROJECT_NAME} PRIVATE
        --coverage ${SANITIZER_FLAGS}
 )
 
+# fix the .gcda not getting cleaned and showing as corrupted, even with --clean-first
+add_custom_target(clean-gcda
+  COMMAND ${CMAKE_COMMAND} -E rm -f
+  ${CMAKE_BINARY_DIR}/CMakeFiles/bulb.dir/src/*.gcda
+  COMMENT "Removing stale .gcda files"
+)
+add_dependencies(bulb clean-gcda)
+
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_MODULE_STD 1)
 target_link_libraries(${PROJECT_NAME} PRIVATE
   SDL3::SDL3
@@ -57,6 +65,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   SDL3_ttf::SDL3_ttf
   glm::glm
 )
+
 
 # clang-tidy
 option(TIDY "Enable clang-tidy pass" OFF)
