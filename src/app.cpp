@@ -97,14 +97,14 @@ void App::setup_gpu_resources() {
 			{
 				.location = 0,
 				.buffer_slot = 0,
-				.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+				.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
 				.offset = 0 // first member
 			},
 			{
 				.location = 1,
 				.buffer_slot = 0,
 				.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
-				.offset = sizeof(glm::vec2) // comes after pos (glm vec2)
+				.offset = sizeof(glm::vec3) // comes after pos (glm vec3)
 			}
 		}
 	};

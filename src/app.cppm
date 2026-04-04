@@ -5,11 +5,11 @@ module;
 export module app;
 import std;
 
-const std::string FRAGMENT_SHADER_PATH = "/home/omathot/dev/cpp/sdl3/shaders/fragment.spv";
-const std::string VERTEX_SHADER_PATH = "/home/omathot/dev/cpp/sdl3/shaders/vertex.spv";
+const std::string FRAGMENT_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/fragment.spv";
+const std::string VERTEX_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/vertex.spv";
 
-constexpr std::uint32_t WINDOW_WIDTH = 800;
-constexpr std::uint32_t WINDOW_HEIGHT = 600;
+export constexpr std::uint32_t WINDOW_WIDTH = 800;
+export constexpr std::uint32_t WINDOW_HEIGHT = 600;
 
 #if defined(NDEBUG)
 	constexpr bool enableDebug = false;
@@ -19,15 +19,15 @@ constexpr std::uint32_t WINDOW_HEIGHT = 600;
 
 
 struct Vertex {
-	glm::vec2 pos;
+	glm::vec3 pos;
 	glm::vec3 color;
 };
 
 const std::vector<Vertex> vertices = {
-    {.pos={-0.5f, -0.5f}, .color={1.0f, 0.0f, 0.0f}},
-    {.pos={0.5f, -0.5f}, .color={0.0f, 1.0f, 0.0f}},
-    {.pos={0.5f, 0.5f}, .color={0.0f, 0.0f, 1.0f}},
-    {.pos={-0.5f, 0.5f}, .color={1.0f, 1.0f, 1.0f}}
+    {.pos={-0.5f, -0.5f, 0.0f,}, .color={1.0f, 0.0f, 0.0f}},
+    {.pos={0.5f, -0.5f, 0.0f,}, .color={0.0f, 1.0f, 0.0f}},
+    {.pos={0.5f, 0.5f, 0.0f,}, .color={0.0f, 0.0f, 1.0f}},
+    {.pos={-0.5f, 0.5f, 0.0f,}, .color={1.0f, 1.0f, 1.0f}}
 };
 export const std::vector<std::uint16_t> indices = {
     0, 1, 2, 2, 3, 0

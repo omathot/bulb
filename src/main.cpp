@@ -2,6 +2,7 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 import app;
 
@@ -67,10 +68,19 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 	SDL_BindGPUGraphicsPipeline(renderPass, app->get_graphics_pipeline());
 
 	// push constants
+	float aspect = static_cast<float>(WINDOW_WIDTH) / static_cast<float>(WINDOW_HEIGHT);
+	glm::mat4 proj = glm::perspectiveZO(glm::radians(45.0f), aspect, 0.1f, 100.0f);
+	static float angle = 0.0f;
+	angle += 0.01f;
+	proj[1][1] *= -1;
 	UniformBuffer ubo {
-		.model = glm::mat4(1.0f),
-		.view = glm::mat4(1.0f),
-		.proj = glm::mat4(1.0f)
+		.model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f)),
+		.view = glm::lookAt(
+			glm::vec3(0.0f, 0.0f, 2.0f),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f)
+		),
+		.proj = proj
 	};
 	SDL_PushGPUVertexUniformData(cmdBuff, 0, &ubo, sizeof(ubo));
 
