@@ -25,13 +25,10 @@ App::App() {
 		SDL_Log("Failed to create GPU Device: %s", SDL_GetError());
 	}
 	set_device(device); // prefer vulkan
-
-	auto* renderer = SDL_CreateRenderer(get_window(), "vulkan,opengl");
-	if (!renderer) {
-		SDL_Log("Failed to create renderer: %s", SDL_GetError());
-	}
-	set_renderer(renderer);
-	SDL_Log("graphics backend: %s", SDL_GetRendererName(_renderer));
+	SDL_PropertiesID deviceProps = SDL_GetGPUDeviceProperties(_device);
+	const auto* name = SDL_GetStringProperty(deviceProps, SDL_PROP_GPU_DEVICE_NAME_STRING, "unknown");
+	SDL_Log("Picked device: %s", name);
+	SDL_Log("using driver: %s", SDL_GetGPUDeviceDriver(_device));
 
 	SDL_ClaimWindowForGPUDevice(_device, _window);
 	setup_gpu_resources();
@@ -113,14 +110,6 @@ void App::set_window(SDL_Window* window) {
 	_window = window;
 }
 
-SDL_Renderer* App::get_renderer() const {
-	return _renderer;
-}
-
-void App::set_renderer(SDL_Renderer* renderer) {
-	_renderer = renderer;
-}
-
 SDL_GPUDevice* App::get_device() const {
 	return _device;
 }
@@ -138,9 +127,9 @@ bool App::should_exit() const {
 }
 
 void App::cleanup() {
-	SDL_DestroyRenderer(_renderer);
 	SDL_ReleaseGPUBuffer(_device, _vertexBuff);
 	SDL_ReleaseGPUBuffer(_device, _indexBuff);
+	SDL_ReleaseWindowFromGPUDevice(_device, _window);
 	SDL_DestroyGPUDevice(_device);
 	SDL_DestroyWindow(_window);
 }

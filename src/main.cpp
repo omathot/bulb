@@ -49,9 +49,23 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 	if (app->should_exit())
 		return SDL_APP_SUCCESS;
 
-	SDL_SetRenderDrawColor(app->get_renderer(), 0, 0, 0, 255);
-	SDL_RenderClear(app->get_renderer());
-	SDL_RenderPresent(app->get_renderer());
+	auto* cmdBuff = SDL_AcquireGPUCommandBuffer(app->get_device());
+	SDL_GPUTexture* swapchain = nullptr;
+	SDL_WaitAndAcquireGPUSwapchainTexture(cmdBuff, app->get_window(), &swapchain, nullptr, nullptr);
+	if (!swapchain) {
+		SDL_Log("Failed to acquire GPU Swapchain Texture: %s", SDL_GetError());
+		return SDL_APP_FAILURE;
+	}
+	SDL_GPUColorTargetInfo colorInfo {
+		.texture = swapchain,
+		.clear_color = {.r = 0.0f, .g=0.0f, .b=0.0f, .a = 1.0f},
+		.load_op = SDL_GPU_LOADOP_CLEAR,
+		.store_op = SDL_GPU_STOREOP_STORE,
+	};
+	auto* renderPass = SDL_BeginGPURenderPass(cmdBuff, &colorInfo, 1, nullptr);
+	// bind pipeline, vertex/index buff, draw
+	SDL_EndGPURenderPass(renderPass);
+	SDL_SubmitGPUCommandBuffer(cmdBuff);
 
 	return SDL_APP_CONTINUE;
 }

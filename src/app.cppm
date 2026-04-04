@@ -39,8 +39,6 @@ public:
 	void cleanup();
 	[[nodiscard]] SDL_Window* get_window() const;
 	void set_window(SDL_Window* window);
-	[[nodiscard]] SDL_Renderer* get_renderer() const;
-	void set_renderer(SDL_Renderer* renderer);
 	[[nodiscard]] SDL_GPUDevice* get_device() const;
 	void set_device(SDL_GPUDevice* device);
 	void terminate();
@@ -48,7 +46,6 @@ public:
 
 private:
 	SDL_Window* _window = nullptr;
-	SDL_Renderer* _renderer = nullptr;
 	SDL_GPUDevice* _device = nullptr;
 	bool _should_exit = false;
 
@@ -62,7 +59,6 @@ private:
 extern "C" const char* __lsan_default_suppressions() { // NOLINT
 	return
 		"leak:SDL_CreateGPUDevice\n"
-		"leak:SDL_CreateRenderer\n"
 		"leak:asan_thread_start\n"
 		"leak:X11_\n"
 		"leak:libxkbcommon\n";
