@@ -5,7 +5,8 @@ module;
 export module app;
 import std;
 
-const std::string SHADER_PATH = "/home/omathot/dev/cpp/sdl3/shaders/shader.spv";
+const std::string FRAGMENT_SHADER_PATH = "/home/omathot/dev/cpp/sdl3/shaders/fragment.spv";
+const std::string VERTEX_SHADER_PATH = "/home/omathot/dev/cpp/sdl3/shaders/vertex.spv";
 
 constexpr std::uint32_t WINDOW_WIDTH = 800;
 constexpr std::uint32_t WINDOW_HEIGHT = 600;
@@ -28,10 +29,15 @@ const std::vector<Vertex> vertices = {
     {.pos={0.5f, 0.5f}, .color={0.0f, 0.0f, 1.0f}},
     {.pos={-0.5f, 0.5f}, .color={1.0f, 1.0f, 1.0f}}
 };
-const std::vector<std::uint16_t> indices = {
+export const std::vector<std::uint16_t> indices = {
     0, 1, 2, 2, 3, 0
 };
 
+export struct UniformBuffer {
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
+};
 
 
 export class App {
@@ -47,6 +53,7 @@ public:
 	[[nodiscard]] bool should_exit() const;
 	[[nodiscard]] SDL_GPUBuffer* get_vertex_buff() const;
 	[[nodiscard]] SDL_GPUBuffer* get_index_buff() const;
+	[[nodiscard]] SDL_GPUGraphicsPipeline* get_graphics_pipeline() const;
 
 private:
 	SDL_Window* _window = nullptr;
@@ -55,6 +62,8 @@ private:
 
 	SDL_GPUBuffer* _vertexBuff = nullptr;
 	SDL_GPUBuffer* _indexBuff = nullptr;
+
+	SDL_GPUGraphicsPipeline* _pipeline = nullptr;
 
 	void setup_gpu_resources();
 };

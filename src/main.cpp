@@ -1,6 +1,7 @@
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL.h>
+#include <glm/glm.hpp>
 
 import app;
 
@@ -53,17 +54,27 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 	SDL_GPUTexture* swapchain = nullptr;
 	SDL_WaitAndAcquireGPUSwapchainTexture(cmdBuff, app->get_window(), &swapchain, nullptr, nullptr);
 	if (!swapchain) {
-		SDL_Log("Failed to acquire GPU Swapchain Texture: %s", SDL_GetError());
-		return SDL_APP_FAILURE;
+		SDL_SubmitGPUCommandBuffer(cmdBuff);
+		return SDL_APP_CONTINUE;
 	}
 	SDL_GPUColorTargetInfo colorInfo {
 		.texture = swapchain,
-		.clear_color = {.r = 0.0f, .g=0.0f, .b=0.0f, .a = 1.0f},
+		.clear_color = {.r = 0.1f, .g=0.01f, .b=0.1f, .a = 1.0f},
 		.load_op = SDL_GPU_LOADOP_CLEAR,
 		.store_op = SDL_GPU_STOREOP_STORE,
 	};
 	auto* renderPass = SDL_BeginGPURenderPass(cmdBuff, &colorInfo, 1, nullptr);
-	// bind pipeline, vertex/index buff, draw
+	SDL_BindGPUGraphicsPipeline(renderPass, app->get_graphics_pipeline());
+
+	// push constants
+	UniformBuffer ubo {
+		.model = glm::mat4(1.0f),
+		.view = glm::mat4(1.0f),
+		.proj = glm::mat4(1.0f)
+	};
+	SDL_PushGPUVertexUniformData(cmdBuff, 0, &ubo, sizeof(ubo));
+
+	// bindings
 	SDL_GPUBufferBinding indexBinding {
 		.buffer = app->get_index_buff(),
 		.offset = 0,
@@ -74,7 +85,11 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 	};
 	SDL_BindGPUIndexBuffer(renderPass, &indexBinding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
 	SDL_BindGPUVertexBuffers(renderPass, 0, &vertexBinding, 1);
+
+	// draw
+	SDL_DrawGPUIndexedPrimitives(renderPass, static_cast<std::uint32_t>(indices.size()), 1, 0, 0, 0);
 	SDL_EndGPURenderPass(renderPass);
+
 	SDL_SubmitGPUCommandBuffer(cmdBuff);
 
 	return SDL_APP_CONTINUE;
