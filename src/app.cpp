@@ -1,6 +1,7 @@
 module;
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <SDL3_shadercross/SDL_shadercross.h>
 
 module app;
@@ -10,7 +11,7 @@ import std;
 [[nodiscard]] constexpr std::uint32_t make_vk_version(uint32_t major, uint32_t minor, uint32_t patch);
 
 App::App() {
-	if (enableDebug)
+	if (enable_debug)
 		SDL_Log("Starting app in Debug mode");
 	else
 		SDL_Log("Starting app in release mode");
@@ -29,21 +30,21 @@ App::App() {
 	}
 	set_window(window);
 
-	SDL_GPUVulkanOptions vulkanOpts {
+	SDL_GPUVulkanOptions vulkan_opts {
 		.vulkan_api_version = make_vk_version(1, 3, 0),
 	};
-	SDL_PropertiesID gpuProps = SDL_CreateProperties();
-	SDL_SetBooleanProperty(gpuProps, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
-	SDL_SetBooleanProperty(gpuProps, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, enableDebug);
-	SDL_SetStringProperty(gpuProps, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, "vulkan");
-	SDL_SetPointerProperty(gpuProps, SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER, &vulkanOpts);
-	auto* device = SDL_CreateGPUDeviceWithProperties(gpuProps);
+	SDL_PropertiesID gpu_props = SDL_CreateProperties();
+	SDL_SetBooleanProperty(gpu_props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
+	SDL_SetBooleanProperty(gpu_props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, enable_debug);
+	SDL_SetStringProperty(gpu_props, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, "vulkan");
+	SDL_SetPointerProperty(gpu_props, SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER, &vulkan_opts);
+	auto* device = SDL_CreateGPUDeviceWithProperties(gpu_props);
 	if (!device) {
 		SDL_Log("Failed to create GPU Device: %s", SDL_GetError());
 	}
 	set_device(device); // prefer vulkan
-	SDL_PropertiesID deviceProps = SDL_GetGPUDeviceProperties(_device);
-	const auto* name = SDL_GetStringProperty(deviceProps, SDL_PROP_GPU_DEVICE_NAME_STRING, "unknown");
+	SDL_PropertiesID device_props = SDL_GetGPUDeviceProperties(_device);
+	const auto* name = SDL_GetStringProperty(device_props, SDL_PROP_GPU_DEVICE_NAME_STRING, "unknown");
 	SDL_Log("Picked device: %s", name);
 	SDL_Log("using driver: %s", SDL_GetGPUDeviceDriver(_device));
 
@@ -53,11 +54,11 @@ App::App() {
 
 void App::setup_gpu_resources() {
 	// shader
-	auto fragCode = read_file(FRAGMENT_SHADER_PATH);
-	auto vertCode = read_file(VERTEX_SHADER_PATH);
+	auto frag_code = read_file(FRAGMENT_SHADER_PATH);
+	auto vert_code = read_file(VERTEX_SHADER_PATH);
 	SDL_GPUShaderCreateInfo vertInfo {
-		.code_size = vertCode.size() * sizeof(char),
-		.code = reinterpret_cast<const std::uint8_t*>(vertCode.data()),
+		.code_size = vert_code.size() * sizeof(char),
+		.code = reinterpret_cast<const std::uint8_t*>(vert_code.data()),
 		.entrypoint = "vertMain",
 		.format = SDL_GPU_SHADERFORMAT_SPIRV,
 		.stage = SDL_GPU_SHADERSTAGE_VERTEX,
@@ -67,8 +68,8 @@ void App::setup_gpu_resources() {
 		.num_uniform_buffers = 1,
 	};
 	SDL_GPUShaderCreateInfo fragInfo {
-		.code_size = fragCode.size() * sizeof(char),
-		.code = reinterpret_cast<const std::uint8_t*>(fragCode.data()),
+		.code_size = frag_code.size() * sizeof(char),
+		.code = reinterpret_cast<const std::uint8_t*>(frag_code.data()),
 		.entrypoint = "fragMain",
 		.format = SDL_GPU_SHADERFORMAT_SPIRV,
 		.stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
@@ -77,22 +78,22 @@ void App::setup_gpu_resources() {
 		.num_storage_buffers = 0,
 		.num_uniform_buffers = 0,
 	};
-	SDL_GPUShader* vertShader = SDL_CreateGPUShader(_device, &vertInfo);
-	if (!vertShader) {
+	SDL_GPUShader* vert_shader = SDL_CreateGPUShader(_device, &vertInfo);
+	if (!vert_shader) {
 		SDL_Log("Failed to cross compile vertShader: %s", SDL_GetError());
 	}
-	SDL_GPUShader* fragShader = SDL_CreateGPUShader(_device, &fragInfo);
-	if (!fragShader) {
+	SDL_GPUShader* frag_shader = SDL_CreateGPUShader(_device, &fragInfo);
+	if (!frag_shader) {
 		SDL_Log("Failed to cross compile vertShader: %s", SDL_GetError());
 	}
 
 	// pipeline
-	SDL_GPUVertexBufferDescription vertexBuffDesc {
+	SDL_GPUVertexBufferDescription vertex_buff_desc {
 		.slot = 0,
 		.pitch = sizeof(Vertex),
 		.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
 	};
-	std::array<SDL_GPUVertexAttribute, 2> vertexAttributes = {
+	std::array<SDL_GPUVertexAttribute, 2> vertex_attributes = {
 		{
 			{
 				.location = 0,
@@ -109,98 +110,183 @@ void App::setup_gpu_resources() {
 		}
 	};
 
-	SDL_GPUVertexInputState vertexInput {
-		.vertex_buffer_descriptions = &vertexBuffDesc,
+	SDL_GPUVertexInputState vertex_input {
+		.vertex_buffer_descriptions = &vertex_buff_desc,
 		.num_vertex_buffers = 1,
-		.vertex_attributes = static_cast<const SDL_GPUVertexAttribute*>(vertexAttributes.data()),
+		.vertex_attributes = static_cast<const SDL_GPUVertexAttribute*>(vertex_attributes.data()),
 		.num_vertex_attributes = 2,
 	};
-	SDL_GPUColorTargetDescription colorTarget {
+	SDL_GPUColorTargetDescription color_target {
 		.format = SDL_GetGPUSwapchainTextureFormat(_device, _window),
 	};
 
-	SDL_GPUGraphicsPipelineCreateInfo pipelineInfo {
-		.vertex_shader = vertShader,
-		.fragment_shader = fragShader,
-		.vertex_input_state = vertexInput,
+	SDL_GPUGraphicsPipelineCreateInfo pipeline_info {
+		.vertex_shader = vert_shader,
+		.fragment_shader = frag_shader,
+		.vertex_input_state = vertex_input,
 		.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
 		.target_info = {
-			.color_target_descriptions = &colorTarget,
+			.color_target_descriptions = &color_target,
 			.num_color_targets = 1,
 		},
 	};
 
-	_graphics_pipeline = SDL_CreateGPUGraphicsPipeline(_device, &pipelineInfo);
-	SDL_ReleaseGPUShader(_device, fragShader);
-	SDL_ReleaseGPUShader(_device, vertShader);
+	_graphics_pipeline = SDL_CreateGPUGraphicsPipeline(_device, &pipeline_info);
+	SDL_ReleaseGPUShader(_device, frag_shader);
+	SDL_ReleaseGPUShader(_device, vert_shader);
 
 	// buffers
-	std::uint32_t vertexSize = static_cast<Uint32>(vertices.size() * sizeof(Vertex));
-	std::uint32_t indexSize = static_cast<Uint32>(indices.size() * sizeof(std::uint16_t));
+	std::uint32_t vertex_size = static_cast<Uint32>(vertices.size() * sizeof(Vertex));
+	std::uint32_t index_size = static_cast<Uint32>(indices.size() * sizeof(std::uint16_t));
 	SDL_GPUBufferCreateInfo vertexInfo {
 		.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-		.size = vertexSize,
+		.size = vertex_size,
 		.props = 0,
 	};
-	auto* vertexBuff = SDL_CreateGPUBuffer(_device, &vertexInfo);
-	SDL_GPUBufferCreateInfo indexInfo {
+	auto* vertex_buff = SDL_CreateGPUBuffer(_device, &vertexInfo);
+	SDL_GPUBufferCreateInfo index_info {
 		.usage = SDL_GPU_BUFFERUSAGE_INDEX,
-		.size = indexSize,
+		.size = index_size,
 		.props = 0
 	};
-	auto* indexBuff = SDL_CreateGPUBuffer(_device, &indexInfo);
+	auto* index_buff = SDL_CreateGPUBuffer(_device, &index_info);
 
 	// big enough for both
-	SDL_GPUTransferBufferCreateInfo transferInfo {
+	SDL_GPUTransferBufferCreateInfo transfer_info {
 		.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-		.size = vertexSize + indexSize,
+		.size = vertex_size + index_size,
 		.props = 0,
 	};
-	auto* transferBuff = SDL_CreateGPUTransferBuffer(_device, &transferInfo);
-	auto* data = static_cast<std::uint8_t*>(SDL_MapGPUTransferBuffer(_device, transferBuff, false));
+	auto* transfer_buff = SDL_CreateGPUTransferBuffer(_device, &transfer_info);
+	auto* data = static_cast<std::uint8_t*>(SDL_MapGPUTransferBuffer(_device, transfer_buff, false));
 	if (!data) {
 		SDL_Log("Failed to map TransferBuffer: %s", SDL_GetError());
-		SDL_ReleaseGPUTransferBuffer(_device, transferBuff);
+		SDL_ReleaseGPUTransferBuffer(_device, transfer_buff);
 		return;
 	}
-	SDL_memcpy(data, vertices.data(), vertexSize);
-	SDL_memcpy(data + vertexSize, indices.data(), indexSize);
-	SDL_UnmapGPUTransferBuffer(_device, transferBuff);
+	SDL_memcpy(data, vertices.data(), vertex_size);
+	SDL_memcpy(data + vertex_size, indices.data(), index_size);
+	SDL_UnmapGPUTransferBuffer(_device, transfer_buff);
 
-	auto* cmdBuff = SDL_AcquireGPUCommandBuffer(_device);
-	auto* copyPass = SDL_BeginGPUCopyPass(cmdBuff);
+	auto* cmd_buff = SDL_AcquireGPUCommandBuffer(_device);
+	auto* copy_pass = SDL_BeginGPUCopyPass(cmd_buff);
 
 	// upload vertices
-	SDL_GPUTransferBufferLocation vertexSrc {
-		.transfer_buffer = transferBuff,
+	SDL_GPUTransferBufferLocation vertex_src {
+		.transfer_buffer = transfer_buff,
 		.offset = 0,
 	};
-	SDL_GPUBufferRegion vertexDst {
-		.buffer = vertexBuff,
+	SDL_GPUBufferRegion vertex_dst {
+		.buffer = vertex_buff,
 		.offset = 0,
-		.size = vertexSize,
+		.size = vertex_size,
 	};
-	SDL_UploadToGPUBuffer(copyPass, &vertexSrc, &vertexDst, false);
+	SDL_UploadToGPUBuffer(copy_pass, &vertex_src, &vertex_dst, false);
 
 	// upload indices
-	SDL_GPUTransferBufferLocation indexSrc {
-		.transfer_buffer = transferBuff,
-		.offset = vertexSize,
+	SDL_GPUTransferBufferLocation index_src {
+		.transfer_buffer = transfer_buff,
+		.offset = vertex_size,
 	};
-	SDL_GPUBufferRegion indexDst {
-		.buffer = indexBuff,
+	SDL_GPUBufferRegion index_dst {
+		.buffer = index_buff,
 		.offset = 0,
-		.size = indexSize
+		.size = index_size
 	};
-	SDL_UploadToGPUBuffer(copyPass, &indexSrc, &indexDst, false);
+	SDL_UploadToGPUBuffer(copy_pass, &index_src, &index_dst, false);
 
 
-	SDL_EndGPUCopyPass(copyPass);
-	SDL_SubmitGPUCommandBuffer(cmdBuff);
-	SDL_ReleaseGPUTransferBuffer(_device, transferBuff);
+	SDL_EndGPUCopyPass(copy_pass);
+	SDL_SubmitGPUCommandBuffer(cmd_buff);
+	SDL_ReleaseGPUTransferBuffer(_device, transfer_buff);
 
-	_vertexBuff = vertexBuff;
-	_indexBuff = indexBuff;
+	_vertex_buff = vertex_buff;
+	_index_buff = index_buff;
+}
+
+SDL_AppResult App::iterate() const {
+	if (should_exit())
+		return SDL_APP_SUCCESS;
+
+	auto* cmd_buff = SDL_AcquireGPUCommandBuffer(get_device());
+	SDL_GPUTexture* swapchain = nullptr;
+	SDL_WaitAndAcquireGPUSwapchainTexture(cmd_buff, get_window(), &swapchain, nullptr, nullptr);
+	if (!swapchain) {
+		SDL_SubmitGPUCommandBuffer(cmd_buff);
+		return SDL_APP_CONTINUE;
+	}
+	SDL_GPUColorTargetInfo color_info {
+		.texture = swapchain,
+		.clear_color = {.r = 0.1f, .g=0.01f, .b=0.1f, .a = 1.0f},
+		.load_op = SDL_GPU_LOADOP_CLEAR,
+		.store_op = SDL_GPU_STOREOP_STORE,
+	};
+	auto* render_pass = SDL_BeginGPURenderPass(cmd_buff, &color_info, 1, nullptr);
+	SDL_BindGPUGraphicsPipeline(render_pass, get_graphics_pipeline());
+
+	// push constants
+	float aspect = static_cast<float>(WINDOW_WIDTH) / static_cast<float>(WINDOW_HEIGHT);
+	glm::mat4 proj = glm::perspectiveZO(glm::radians(45.0f), aspect, 0.1f, 100.0f);
+	static float angle = 0.0f;
+	angle += 0.01f;
+	proj[1][1] *= -1;
+	UniformBuffer ubo {
+		.model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f)),
+		.view = glm::lookAt(
+			glm::vec3(0.0f, 0.0f, 2.0f),
+			glm::vec3(0.0f, 0., 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f)
+		),
+		.proj = proj
+	};
+	SDL_PushGPUVertexUniformData(cmd_buff, 0, &ubo, sizeof(ubo));
+
+	// bindings
+	SDL_GPUBufferBinding index_binding {
+		.buffer = get_index_buff(),
+		.offset = 0,
+	};
+	SDL_GPUBufferBinding vertex_binding {
+		.buffer = get_vertex_buff(),
+		.offset = 0,
+	};
+	SDL_BindGPUIndexBuffer(render_pass, &index_binding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+	SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_binding, 1);
+
+	// draw
+	SDL_DrawGPUIndexedPrimitives(render_pass, static_cast<std::uint32_t>(indices.size()), 1, 0, 0, 0);
+	SDL_EndGPURenderPass(render_pass);
+
+	SDL_SubmitGPUCommandBuffer(cmd_buff);
+
+	return SDL_APP_CONTINUE;
+}
+
+SDL_AppResult App::handle_event(SDL_Event* event) {
+	switch (event->type) {
+		case SDL_EVENT_QUIT:
+			terminate();
+			break;
+		case SDL_EVENT_KEY_DOWN:
+			switch (event->key.key) {
+				case SDLK_ESCAPE:
+					terminate();
+					break;
+				default:
+					SDL_Log("key down: %s", SDL_GetKeyName(event->key.key));
+					break;
+			}
+			break;
+		case SDL_EVENT_KEY_UP:
+			SDL_Log("key up: %s", SDL_GetKeyName(event->key.key));
+			break;
+		default:
+			std::array<char, 256> desc{};
+			SDL_GetEventDescription(event, static_cast<char*>(desc.data()), sizeof(desc));
+			SDL_Log("Unhandled event: %s", static_cast<char*>(desc.data()));
+			break;
+	}
+	return SDL_APP_CONTINUE;
 }
 
 SDL_Window* App::get_window() const {
@@ -220,11 +306,11 @@ void App::set_device(SDL_GPUDevice* device) {
 }
 
 SDL_GPUBuffer* App::get_vertex_buff() const {
-	return _vertexBuff;
+	return _vertex_buff;
 }
 
 SDL_GPUBuffer* App::get_index_buff() const {
-	return _indexBuff;
+	return _index_buff;
 }
 
 SDL_GPUGraphicsPipeline* App::get_graphics_pipeline() const {
@@ -240,8 +326,8 @@ bool App::should_exit() const {
 }
 
 void App::cleanup() {
-	SDL_ReleaseGPUBuffer(_device, _vertexBuff);
-	SDL_ReleaseGPUBuffer(_device, _indexBuff);
+	SDL_ReleaseGPUBuffer(_device, _vertex_buff);
+	SDL_ReleaseGPUBuffer(_device, _index_buff);
 	SDL_ReleaseGPUGraphicsPipeline(_device, _graphics_pipeline);
 	SDL_ReleaseWindowFromGPUDevice(_device, _window);
 	SDL_DestroyGPUDevice(_device);

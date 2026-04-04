@@ -8,13 +8,13 @@ import std;
 const std::string FRAGMENT_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/fragment.spv";
 const std::string VERTEX_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/vertex.spv";
 
-export constexpr std::uint32_t WINDOW_WIDTH = 800;
-export constexpr std::uint32_t WINDOW_HEIGHT = 600;
+constexpr std::uint32_t WINDOW_WIDTH = 800;
+constexpr std::uint32_t WINDOW_HEIGHT = 600;
 
 #if defined(NDEBUG)
-	constexpr bool enableDebug = false;
+	constexpr bool enable_debug = false;
 #else
-	constexpr bool enableDebug = true;
+	constexpr bool enable_debug = true;
 #endif
 
 
@@ -29,11 +29,11 @@ const std::vector<Vertex> vertices = {
     {.pos={0.5f, 0.5f, 0.0f,}, .color={0.0f, 0.0f, 1.0f}},
     {.pos={-0.5f, 0.5f, 0.0f,}, .color={1.0f, 1.0f, 1.0f}}
 };
-export const std::vector<std::uint16_t> indices = {
+const std::vector<std::uint16_t> indices = {
     0, 1, 2, 2, 3, 0
 };
 
-export struct UniformBuffer {
+struct UniformBuffer {
 	glm::mat4 model;
 	glm::mat4 view;
 	glm::mat4 proj;
@@ -45,6 +45,8 @@ public:
 	App();
 
 	void cleanup();
+	[[nodiscard]] SDL_AppResult iterate() const;
+	[[nodiscard]] SDL_AppResult handle_event(SDL_Event* event);
 	[[nodiscard]] SDL_Window* get_window() const;
 	void set_window(SDL_Window* window);
 	[[nodiscard]] SDL_GPUDevice* get_device() const;
@@ -60,8 +62,8 @@ private:
 	SDL_GPUDevice* _device = nullptr;
 	bool _should_exit = false;
 
-	SDL_GPUBuffer* _vertexBuff = nullptr;
-	SDL_GPUBuffer* _indexBuff = nullptr;
+	SDL_GPUBuffer* _vertex_buff = nullptr;
+	SDL_GPUBuffer* _index_buff = nullptr;
 
 	SDL_GPUGraphicsPipeline* _graphics_pipeline = nullptr;
 
