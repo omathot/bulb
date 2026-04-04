@@ -38,45 +38,71 @@ App::App() {
 }
 
 void App::setup_gpu_resources() {
-	SDL_GPUBufferCreateInfo bufferInfo {
+	std::uint32_t vertexSize = static_cast<Uint32>(vertices.size() * sizeof(Vertex));
+	std::uint32_t indexSize = static_cast<Uint32>(indices.size() * sizeof(std::uint16_t));
+	SDL_GPUBufferCreateInfo vertexInfo {
 		.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-		.size = static_cast<Uint32>(vertices.size() * sizeof(Vertex)),
+		.size = vertexSize,
 		.props = 0,
 	};
-	auto* vertexBuff = SDL_CreateGPUBuffer(_device, &bufferInfo);
+	auto* vertexBuff = SDL_CreateGPUBuffer(_device, &vertexInfo);
+	SDL_GPUBufferCreateInfo indexInfo {
+		.usage = SDL_GPU_BUFFERUSAGE_INDEX,
+		.size = indexSize,
+		.props = 0
+	};
+	auto* indexBuff = SDL_CreateGPUBuffer(_device, &indexInfo);
+
+	// big enough for both
 	SDL_GPUTransferBufferCreateInfo transferInfo {
 		.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-		.size = static_cast<Uint32>(vertices.size() * sizeof(Vertex)),
+		.size = vertexSize + indexSize,
 		.props = 0,
 	};
 	auto* transferBuff = SDL_CreateGPUTransferBuffer(_device, &transferInfo);
-	Vertex* data = static_cast<Vertex*>(SDL_MapGPUTransferBuffer(_device, transferBuff, false));
+	auto* data = static_cast<std::uint8_t*>(SDL_MapGPUTransferBuffer(_device, transferBuff, false));
 	if (!data) {
 		SDL_Log("Failed to map TransferBuffer: %s", SDL_GetError());
 		SDL_ReleaseGPUTransferBuffer(_device, transferBuff);
 		return;
 	}
-	SDL_memcpy(data, vertices.data(), (vertices.size() * sizeof(Vertex)));
+	SDL_memcpy(data, vertices.data(), vertexSize);
 	SDL_UnmapGPUTransferBuffer(_device, transferBuff);
-	// TODO: use cmd buff to upload from transferBuff to a GPU VertexBuff
+
 	auto* cmdBuff = SDL_AcquireGPUCommandBuffer(_device);
 	auto* copyPass = SDL_BeginGPUCopyPass(cmdBuff);
-	SDL_GPUTransferBufferLocation src {
+
+	// upload vertices
+	SDL_GPUTransferBufferLocation vertexSrc {
 		.transfer_buffer = transferBuff,
 		.offset = 0,
 	};
-	SDL_GPUBufferRegion dst {
+	SDL_GPUBufferRegion vertexDst {
 		.buffer = vertexBuff,
 		.offset = 0,
-		.size = static_cast<Uint32>(vertices.size() * sizeof(Vertex)),
+		.size = vertexSize,
 	};
-	SDL_UploadToGPUBuffer(copyPass, &src, &dst, false);
+	SDL_UploadToGPUBuffer(copyPass, &vertexSrc, &vertexDst, false);
+
+	// upload indices
+	SDL_GPUTransferBufferLocation indexSrc {
+		.transfer_buffer = transferBuff,
+		.offset = vertexSize,
+	};
+	SDL_GPUBufferRegion indexDst {
+		.buffer = indexBuff,
+		.offset = 0,
+		.size = indexSize
+	};
+	SDL_UploadToGPUBuffer(copyPass, &indexSrc, &indexDst, false);
+
+
 	SDL_EndGPUCopyPass(copyPass);
 	SDL_SubmitGPUCommandBuffer(cmdBuff);
-
-
 	SDL_ReleaseGPUTransferBuffer(_device, transferBuff);
+
 	_vertexBuff = vertexBuff;
+	_indexBuff = indexBuff;
 }
 
 SDL_Window* App::get_window() const {
@@ -114,6 +140,7 @@ bool App::should_exit() const {
 void App::cleanup() {
 	SDL_DestroyRenderer(_renderer);
 	SDL_ReleaseGPUBuffer(_device, _vertexBuff);
+	SDL_ReleaseGPUBuffer(_device, _indexBuff);
 	SDL_DestroyGPUDevice(_device);
 	SDL_DestroyWindow(_window);
 }

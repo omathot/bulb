@@ -1,6 +1,5 @@
 module;
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_gpu.h>
 #include <glm/glm.hpp>
 
 export module app;
@@ -54,6 +53,7 @@ private:
 	bool _should_exit = false;
 
 	SDL_GPUBuffer* _vertexBuff = nullptr;
+	SDL_GPUBuffer* _indexBuff = nullptr;
 
 	void setup_gpu_resources();
 };

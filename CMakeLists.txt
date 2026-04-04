@@ -58,7 +58,6 @@ function (add_slang_shader_target TARGET)
               OUTPUT  ${SHADERS_DIR}/slang.spv
               COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCES}
                      -target spirv
-                     -profile spirv_1_6+SPV_GOOGLE_user_type+spvDerivativeControl+spvImageQuery+spvImageGatherExtended+spvSparseResidency+spvMinLod+spvFragmentFullyCoveredEXT
                      -emit-spirv-directly
                      -fvk-use-entrypoint-name ${ENTRY_POINTS}
                      -o shader.spv

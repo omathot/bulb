@@ -28,15 +28,17 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event* event) {
 					app->terminate();
 					break;
 				default:
-					SDL_Log("unhandled key input");
+					SDL_Log("key down: %s", SDL_GetKeyName(event->key.key));
 					break;
 			}
 			break;
 		case SDL_EVENT_KEY_UP:
-			SDL_Log("key up: %d", event->key.key);
+			SDL_Log("key up: %s", SDL_GetKeyName(event->key.key));
 			break;
 		default:
-			SDL_Log("Unhandled event: %d", event->type);
+			char desc[256];
+			SDL_GetEventDescription(event, static_cast<char*>(desc), sizeof(desc));
+			SDL_Log("Unhandled event: %s", static_cast<char*>(desc));
 			break;
 	}
 	return SDL_APP_CONTINUE;
