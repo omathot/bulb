@@ -32,6 +32,18 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SDL_ttf)
 
+FetchContent_Declare(
+  SDL_shadercross
+  GIT_REPOSITORY https://github.com/libsdl-org/SDL_shadercross.git
+  GIT_TAG main
+  SYSTEM
+)
+# Needed because spirv-cross isn't shipped in dnf
+# Don't need DXC for developping on Linux, will need it when i want to test on windows
+set(SDLSHADERCROSS_VENDORED ON CACHE BOOL "" FORCE)
+set(SDLSHADERCROSS_DXC OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(SDL_shadercross)
+
 find_package(glm REQUIRED)
 
 file(GLOB_RECURSE SRCS "src/*.cpp")
@@ -42,31 +54,32 @@ if(DEFINED ENV{SLANGC_EXECUTABLE})
 else()
        message(FATAL_ERROR "slangc not found. Must set SLANGC_EXECUTABLE env variable")
 endif()
-set(SHADER_SLANG_SOURCES ${CMAKE_CURRENT_LIST_DIR}/shaders/shader.slang)
+# set(SHADER_SLANG_SOURCES ${CMAKE_CURRENT_LIST_DIR}/shaders/shader.slang)
+file(GLOB_RECURSE SHADER_SLANG_SOURCES "shaders/*.slang")
 # slang compile function
-function (add_slang_shader_target TARGET)
-       cmake_parse_arguments ("SHADER" "" "" "SOURCES" ${ARGN})
-       set (SHADERS_DIR ${CMAKE_CURRENT_LIST_DIR}/shaders)
-       set (ENTRY_POINTS -entry vertMain -entry fragMain)
-       add_custom_command (
-              OUTPUT ${SHADERS_DIR}
-              COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
-       )
-       # very long -profile is to explicitly enable slangc features
-       # not necessary slangc turns them on automatically when needed
-       add_custom_command (
-              OUTPUT  ${SHADERS_DIR}/slang.spv
-              COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCES}
+function(add_slang_shader_target TARGET)
+       cmake_parse_arguments("SHADER" "" "" "SOURCES" ${ARGN})
+       set(SHADERS_DIR ${CMAKE_CURRENT_LIST_DIR}/shaders)
+       set(SPV_OUTPUTS "")
+
+       foreach(SLANG_FILE ${SHADER_SOURCES})
+              get_filename_component(NAME_WE ${SLANG_FILE} NAME_WE)
+              set(SPV_FILE ${SHADERS_DIR}/${NAME_WE}.spv)
+              add_custom_command(
+                     OUTPUT ${SPV_FILE}
+                     COMMAND ${SLANGC_EXECUTABLE} ${SLANG_FILE}
                      -target spirv
                      -emit-spirv-directly
-                     -fvk-use-entrypoint-name ${ENTRY_POINTS}
-                     -o shader.spv
-              WORKING_DIRECTORY ${SHADERS_DIR}
-              DEPENDS ${SHADERS_DIR} ${SHADER_SOURCES}
-              COMMENT "Compiling Slang Shaders"
-              VERBATIM
-       )
-       add_custom_target (${TARGET} DEPENDS ${SHADERS_DIR}/slang.spv)
+                     -fvk-use-entrypoint-name
+                     -o ${SPV_FILE}
+                     DEPENDS ${SLANG_FILE}
+                     COMMENT "Compiling ${NAME_WE}.slang -> ${NAME_WE}.spv"
+                     VERBATIM
+              )
+              list(APPEND SPV_OUTPUTS ${SPV_FILE})
+       endforeach()
+
+       add_custom_target(${TARGET} DEPENDS ${SPV_OUTPUTS})
 endfunction()
 add_slang_shader_target(shaders SOURCES ${SHADER_SLANG_SOURCES})
 
@@ -97,6 +110,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   SDL3::SDL3
   SDL3_image::SDL3_image
   SDL3_ttf::SDL3_ttf
+  SDL3_shadercross::SDL3_shadercross
   glm::glm
 )
 
