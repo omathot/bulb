@@ -1,5 +1,6 @@
 module;
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_gpu.h>
 #include <glm/glm.hpp>
 
 export module app;
@@ -51,6 +52,8 @@ private:
 	SDL_Renderer* _renderer = nullptr;
 	SDL_GPUDevice* _device = nullptr;
 	bool _should_exit = false;
+
+	SDL_GPUBuffer* _vertexBuff = nullptr;
 
 	void setup_gpu_resources();
 };

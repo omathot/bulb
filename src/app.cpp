@@ -1,7 +1,5 @@
 module;
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_error.h>
-#include <SDL3/SDL_properties.h>
 
 module app;
 import std;
@@ -22,7 +20,7 @@ App::App() {
 	}
 	set_window(window);
 
-	auto* device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, enableDebug, "vulkan,opengl");
+	auto* device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, enableDebug, "vulkan");
 	if (!device) {
 		SDL_Log("Failed to create GPU Device: %s", SDL_GetError());
 	}
@@ -40,12 +38,12 @@ App::App() {
 }
 
 void App::setup_gpu_resources() {
-	// SDL_GPUBufferCreateInfo bufferInfo {
-	// 	.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-	// 	.size = static_cast<Uint32>(vertices.size()),
-	// 	.props = 0,
-	// };
-	// auto* vertexBuff = SDL_CreateGPUBuffer(_device, &bufferInfo);
+	SDL_GPUBufferCreateInfo bufferInfo {
+		.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+		.size = static_cast<Uint32>(vertices.size() * sizeof(Vertex)),
+		.props = 0,
+	};
+	auto* vertexBuff = SDL_CreateGPUBuffer(_device, &bufferInfo);
 	SDL_GPUTransferBufferCreateInfo transferInfo {
 		.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
 		.size = static_cast<Uint32>(vertices.size() * sizeof(Vertex)),
@@ -55,10 +53,30 @@ void App::setup_gpu_resources() {
 	Vertex* data = static_cast<Vertex*>(SDL_MapGPUTransferBuffer(_device, transferBuff, false));
 	if (!data) {
 		SDL_Log("Failed to map TransferBuffer: %s", SDL_GetError());
+		SDL_ReleaseGPUTransferBuffer(_device, transferBuff);
 		return;
 	}
-	SDL_memcpy(data, vertices.data(), vertices.size());
+	SDL_memcpy(data, vertices.data(), (vertices.size() * sizeof(Vertex)));
+	SDL_UnmapGPUTransferBuffer(_device, transferBuff);
+	// TODO: use cmd buff to upload from transferBuff to a GPU VertexBuff
+	auto* cmdBuff = SDL_AcquireGPUCommandBuffer(_device);
+	auto* copyPass = SDL_BeginGPUCopyPass(cmdBuff);
+	SDL_GPUTransferBufferLocation src {
+		.transfer_buffer = transferBuff,
+		.offset = 0,
+	};
+	SDL_GPUBufferRegion dst {
+		.buffer = vertexBuff,
+		.offset = 0,
+		.size = static_cast<Uint32>(vertices.size() * sizeof(Vertex)),
+	};
+	SDL_UploadToGPUBuffer(copyPass, &src, &dst, false);
+	SDL_EndGPUCopyPass(copyPass);
+	SDL_SubmitGPUCommandBuffer(cmdBuff);
 
+
+	SDL_ReleaseGPUTransferBuffer(_device, transferBuff);
+	_vertexBuff = vertexBuff;
 }
 
 SDL_Window* App::get_window() const {
@@ -95,6 +113,7 @@ bool App::should_exit() const {
 
 void App::cleanup() {
 	SDL_DestroyRenderer(_renderer);
+	SDL_ReleaseGPUBuffer(_device, _vertexBuff);
 	SDL_DestroyGPUDevice(_device);
 	SDL_DestroyWindow(_window);
 }
