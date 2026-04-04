@@ -78,7 +78,7 @@ target_sources(${PROJECT_NAME}
 )
 set(SANITIZER_FLAGS -fsanitize=address -fsanitize=undefined)
 target_compile_options(${PROJECT_NAME} PRIVATE
-       -Wall -Werror -Wextra -Wshadow -Wconversion --coverage ${SANITIZER_FLAGS}
+       -Wall -Werror -Wextra -Wshadow -Wconversion -Wno-missing-designated-field-initializers --coverage ${SANITIZER_FLAGS}
 )
 target_link_options(${PROJECT_NAME} PRIVATE
        --coverage ${SANITIZER_FLAGS}
