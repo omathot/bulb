@@ -7,7 +7,7 @@ module app;
 import std;
 
 [[nodiscard]] static std::vector<char> read_file(const std::string& filename);
-constexpr std::uint32_t make_vk_version(uint32_t major, uint32_t minor, uint32_t patch);
+[[nodiscard]] constexpr std::uint32_t make_vk_version(uint32_t major, uint32_t minor, uint32_t patch);
 
 App::App() {
 	if (enableDebug)
@@ -130,7 +130,7 @@ void App::setup_gpu_resources() {
 		},
 	};
 
-	_pipeline = SDL_CreateGPUGraphicsPipeline(_device, &pipelineInfo);
+	_graphics_pipeline = SDL_CreateGPUGraphicsPipeline(_device, &pipelineInfo);
 	SDL_ReleaseGPUShader(_device, fragShader);
 	SDL_ReleaseGPUShader(_device, vertShader);
 
@@ -228,7 +228,7 @@ SDL_GPUBuffer* App::get_index_buff() const {
 }
 
 SDL_GPUGraphicsPipeline* App::get_graphics_pipeline() const {
-	return _pipeline;
+	return _graphics_pipeline;
 }
 
 void App::terminate() {
@@ -242,7 +242,7 @@ bool App::should_exit() const {
 void App::cleanup() {
 	SDL_ReleaseGPUBuffer(_device, _vertexBuff);
 	SDL_ReleaseGPUBuffer(_device, _indexBuff);
-	SDL_ReleaseGPUGraphicsPipeline(_device, _pipeline);
+	SDL_ReleaseGPUGraphicsPipeline(_device, _graphics_pipeline);
 	SDL_ReleaseWindowFromGPUDevice(_device, _window);
 	SDL_DestroyGPUDevice(_device);
 	SDL_DestroyWindow(_window);
@@ -263,6 +263,6 @@ void App::cleanup() {
 	return buffer;
 }
 
-constexpr std::uint32_t make_vk_version(uint32_t major, uint32_t minor, uint32_t patch) {
+[[nodiscard]] constexpr std::uint32_t make_vk_version(uint32_t major, uint32_t minor, uint32_t patch) {
 	return (major << 22) | (minor << 12) | patch;
 }

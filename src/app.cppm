@@ -63,7 +63,7 @@ private:
 	SDL_GPUBuffer* _vertexBuff = nullptr;
 	SDL_GPUBuffer* _indexBuff = nullptr;
 
-	SDL_GPUGraphicsPipeline* _pipeline = nullptr;
+	SDL_GPUGraphicsPipeline* _graphics_pipeline = nullptr;
 
 	void setup_gpu_resources();
 };
