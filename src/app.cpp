@@ -4,6 +4,8 @@ module;
 module app;
 import std;
 
+[[nodiscard]] static std::vector<char> read_file(const std::string& filename);
+
 App::App() {
 	if (enableDebug)
 		SDL_Log("Starting app in Debug mode");
@@ -35,6 +37,38 @@ App::App() {
 }
 
 void App::setup_gpu_resources() {
+	// shader
+	auto code = read_file(SHADER_PATH);
+	SDL_GPUShaderCreateInfo fragShaderInfo {
+		.code_size = code.size() * sizeof(char),
+		.code = reinterpret_cast<const std::uint8_t*>(code.data()),
+		.entrypoint = "fragMain",
+		.format = SDL_GPU_SHADERFORMAT_SPIRV,
+		.stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
+		.num_samplers = 0,
+		.num_storage_textures = 0,
+		.num_storage_buffers = 0,
+		.num_uniform_buffers = 1,
+		.props = 0,
+
+	};
+	SDL_GPUShaderCreateInfo vertShaderInfo {
+		.code_size = code.size() * sizeof(char),
+		.code = reinterpret_cast<const std::uint8_t*>(code.data()),
+		.entrypoint = "vertMain",
+		.format = SDL_GPU_SHADERFORMAT_SPIRV,
+		.stage = SDL_GPU_SHADERSTAGE_VERTEX,
+		.num_samplers = 0,
+		.num_storage_textures = 0,
+		.num_storage_buffers = 0,
+		.num_uniform_buffers = 1,
+		.props = 0,
+	};
+
+	SDL_GPUShader* fragShader = SDL_CreateGPUShader(_device, &fragShaderInfo);
+	SDL_GPUShader* vertShader = SDL_CreateGPUShader(_device, &vertShaderInfo);
+
+	// buffers
 	std::uint32_t vertexSize = static_cast<Uint32>(vertices.size() * sizeof(Vertex));
 	std::uint32_t indexSize = static_cast<Uint32>(indices.size() * sizeof(std::uint16_t));
 	SDL_GPUBufferCreateInfo vertexInfo {
@@ -118,6 +152,14 @@ void App::set_device(SDL_GPUDevice* device) {
 	_device = device;
 }
 
+SDL_GPUBuffer* App::get_vertex_buff() const {
+	return _vertexBuff;
+}
+
+SDL_GPUBuffer* App::get_index_buff() const {
+	return _indexBuff;
+}
+
 void App::terminate() {
 	_should_exit = true;
 }
@@ -134,3 +176,15 @@ void App::cleanup() {
 	SDL_DestroyWindow(_window);
 }
 
+[[nodiscard]] static std::vector<char> read_file(const std::string& filename) {
+	std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open())
+		throw std::runtime_error("failed to open file");
+
+	std::vector<char> buffer(static_cast<unsigned long>(file.tellg()));
+	file.seekg(0, std::ios::beg);
+	file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+	file.close();
+	return buffer;
+}

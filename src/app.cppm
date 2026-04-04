@@ -5,6 +5,8 @@ module;
 export module app;
 import std;
 
+const std::string SHADER_PATH = "/home/omathot/dev/cpp/sdl3/shaders/shader.spv";
+
 constexpr std::uint32_t WINDOW_WIDTH = 800;
 constexpr std::uint32_t WINDOW_HEIGHT = 600;
 
@@ -43,6 +45,8 @@ public:
 	void set_device(SDL_GPUDevice* device);
 	void terminate();
 	[[nodiscard]] bool should_exit() const;
+	[[nodiscard]] SDL_GPUBuffer* get_vertex_buff() const;
+	[[nodiscard]] SDL_GPUBuffer* get_index_buff() const;
 
 private:
 	SDL_Window* _window = nullptr;

@@ -64,6 +64,16 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 	};
 	auto* renderPass = SDL_BeginGPURenderPass(cmdBuff, &colorInfo, 1, nullptr);
 	// bind pipeline, vertex/index buff, draw
+	SDL_GPUBufferBinding indexBinding {
+		.buffer = app->get_index_buff(),
+		.offset = 0,
+	};
+	SDL_GPUBufferBinding vertexBinding {
+		.buffer = app->get_vertex_buff(),
+		.offset = 0,
+	};
+	SDL_BindGPUIndexBuffer(renderPass, &indexBinding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+	SDL_BindGPUVertexBuffers(renderPass, 0, &vertexBinding, 1);
 	SDL_EndGPURenderPass(renderPass);
 	SDL_SubmitGPUCommandBuffer(cmdBuff);
 
