@@ -225,20 +225,23 @@ SDL_AppResult App::iterate() const {
 	SDL_BindGPUGraphicsPipeline(render_pass, get_graphics_pipeline());
 
 	// push constants
+	static auto startTime = std::chrono::high_resolution_clock::now();
+	auto  currentTime = std::chrono::high_resolution_clock::now();
+	float time        = std::chrono::duration<float>(currentTime - startTime).count();
+
 	float aspect = static_cast<float>(WINDOW_WIDTH) / static_cast<float>(WINDOW_HEIGHT);
-	glm::mat4 proj = glm::perspectiveZO(glm::radians(45.0f), aspect, 0.1f, 100.0f);
-	static float angle = 0.0f;
-	angle += 0.01f;
-	proj[1][1] *= -1;
+	glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 10.0f);
+	float angle = time * glm::radians(90.0f);
 	UniformBuffer ubo {
-		.model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f)),
+		.model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 0.0f, 1.0f)),
 		.view = glm::lookAt(
-			glm::vec3(0.0f, 0.0f, 2.0f),
-			glm::vec3(0.0f, 0., 0.0f),
-			glm::vec3(0.0f, 1.0f, 0.0f)
+			glm::vec3(2.0f, 2.0f, 2.0f),
+			glm::vec3(0.0f, 0.0, 0.0f),
+			glm::vec3(0.0f, 0.0f, 1.0f)
 		),
 		.proj = proj
 	};
+	proj[1][1] *= -1;
 	SDL_PushGPUVertexUniformData(cmd_buff, 0, &ubo, sizeof(ubo));
 
 	// bindings
