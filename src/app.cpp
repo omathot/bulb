@@ -187,7 +187,7 @@ void App::setup_gpu_resources() {
 		.layer_count_or_depth = 1,
 		.num_levels = 1,
 	};
-	_texture = SDL_CreateGPUTexture(_device, &tex_info);
+	_texture = new Texture(SDL_CreateGPUTexture(_device, &tex_info)); // NOLINT
 
 	// big enough for both buffs + texture
 	SDL_GPUTransferBufferCreateInfo transfer_info {
@@ -241,7 +241,7 @@ void App::setup_gpu_resources() {
 		.offset = vertex_size + index_size,
 	};
 	SDL_GPUTextureRegion tex_dst {
-		.texture = _texture,
+		.texture = _texture->_data,
 		.w = static_cast<std::uint32_t>(tex_width),
 		.h = static_cast<std::uint32_t>(tex_height),
 		.d = 1,
@@ -257,13 +257,13 @@ void App::setup_gpu_resources() {
 	_index_buff = index_buff;
 }
 
-SDL_AppResult App::iterate() const {
+SDL_AppResult App::iterate() {
 	if (should_exit())
 		return SDL_APP_SUCCESS;
 
-	auto* cmd_buff = SDL_AcquireGPUCommandBuffer(get_device());
+	auto* cmd_buff = SDL_AcquireGPUCommandBuffer(_device);
 	SDL_GPUTexture* swapchain = nullptr;
-	SDL_WaitAndAcquireGPUSwapchainTexture(cmd_buff, get_window(), &swapchain, nullptr, nullptr);
+	SDL_WaitAndAcquireGPUSwapchainTexture(cmd_buff, _window, &swapchain, nullptr, nullptr);
 	if (!swapchain) {
 		SDL_SubmitGPUCommandBuffer(cmd_buff);
 		return SDL_APP_CONTINUE;
@@ -275,19 +275,43 @@ SDL_AppResult App::iterate() const {
 		.store_op = SDL_GPU_STOREOP_STORE,
 	};
 	auto* render_pass = SDL_BeginGPURenderPass(cmd_buff, &color_info, 1, nullptr);
-	SDL_BindGPUGraphicsPipeline(render_pass, get_graphics_pipeline());
+	SDL_BindGPUGraphicsPipeline(render_pass, _graphics_pipeline);
 
 
 	// push constants
 	static auto start_time = std::chrono::high_resolution_clock::now();
+	static float total_time = 0.0f;
 	auto  current_time = std::chrono::high_resolution_clock::now();
-	float time        = std::chrono::duration<float>(current_time - start_time).count();
+	_dt = std::chrono::duration<float>(current_time - start_time).count();
+	start_time = current_time;
+	total_time += _dt;
+
+	// update texture pos
+	auto speed = _texture->_controller._speed;
+	if (_texture->_controller.move_left)
+		_texture->_controller._pos.x -= static_cast<float>(speed) * _dt;
+	if (_texture->_controller.move_right)
+		_texture->_controller._pos.x += static_cast<float>(speed) * _dt;
+	if (_texture->_controller.move_further)
+		_texture->_controller._pos.z -= static_cast<float>(speed) * _dt;
+	if (_texture->_controller.move_closer)
+		_texture->_controller._pos.z += static_cast<float>(speed) * _dt;
+	if (_texture->_controller.move_up)
+		_texture->_controller._pos.y += static_cast<float>(speed) * _dt;
+	if (_texture->_controller.move_down)
+		_texture->_controller._pos.y -= static_cast<float>(speed) * _dt;
+
 
 	float aspect = static_cast<float>(WINDOW_WIDTH) / static_cast<float>(WINDOW_HEIGHT);
 	glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 10.0f);
-	float angle = time * glm::radians(90.0f);
+	float angle = total_time * glm::radians(90.0f);
+	glm::mat4 identity = glm::translate(glm::mat4(1.0f), _texture->_controller._pos);
 	UniformBuffer ubo {
-		.model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f)),
+		.model = glm::rotate(
+			identity, // input matrix
+			angle,
+			glm::vec3(0.0f, 1.0f, 0.0f) // axis to rotate around
+		),
 		.view = glm::lookAt(
 			glm::vec3(2.0f, 2.0f, 2.0f),
 			glm::vec3(0.0f, 0.0, 0.0f),
@@ -299,19 +323,19 @@ SDL_AppResult App::iterate() const {
 
 	// bindings
 	SDL_GPUBufferBinding index_binding {
-		.buffer = get_index_buff(),
+		.buffer = _index_buff,
 		.offset = 0,
 	};
 	SDL_GPUBufferBinding vertex_binding {
-		.buffer = get_vertex_buff(),
+		.buffer = _vertex_buff,
 		.offset = 0,
+	};
+	SDL_GPUTextureSamplerBinding sampler_binding {
+		.texture = _texture->_data,
+		.sampler = _sampler,
 	};
 	SDL_BindGPUIndexBuffer(render_pass, &index_binding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
 	SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_binding, 1);
-	SDL_GPUTextureSamplerBinding sampler_binding {
-		.texture = _texture,
-		.sampler = _sampler,
-	};
 	SDL_BindGPUFragmentSamplers(render_pass, 0, &sampler_binding, 1);
 
 	// draw
@@ -333,13 +357,52 @@ SDL_AppResult App::handle_event(SDL_Event* event) {
 				case SDLK_ESCAPE:
 					terminate();
 					break;
+				case SDLK_A:
+					_texture->_controller.move_left = true;
+					break;
+				case SDLK_D:
+					_texture->_controller.move_right = true;
+					break;
+				case SDLK_W:
+					_texture->_controller.move_further = true;
+					break;
+				case SDLK_S:
+					_texture->_controller.move_closer = true;
+					break;
+				case SDLK_UP:
+					_texture->_controller.move_up = true;
+					break;
+				case SDLK_DOWN:
+					_texture->_controller.move_down = true;
+					break;
 				default:
 					SDL_Log("key down: %s", SDL_GetKeyName(event->key.key));
 					break;
 			}
 			break;
 		case SDL_EVENT_KEY_UP:
-			SDL_Log("key up: %s", SDL_GetKeyName(event->key.key));
+			switch (event->key.key) {
+				case SDLK_A:
+					_texture->_controller.move_left = false;
+					break;
+				case SDLK_D:
+					_texture->_controller.move_right = false;
+					break;
+				case SDLK_W:
+					_texture->_controller.move_further = false;
+					break;
+				case SDLK_S:
+					_texture->_controller.move_closer = false;
+					break;
+				case SDLK_UP:
+					_texture->_controller.move_up = false;
+					break;
+				case SDLK_DOWN:
+					_texture->_controller.move_down = false;
+					break;
+				default:
+					break;
+			}
 			break;
 		default:
 			std::array<char, 256> desc{};
@@ -350,32 +413,12 @@ SDL_AppResult App::handle_event(SDL_Event* event) {
 	return SDL_APP_CONTINUE;
 }
 
-SDL_Window* App::get_window() const {
-	return _window;
-}
-
 void App::set_window(SDL_Window* window) {
 	_window = window;
 }
 
-SDL_GPUDevice* App::get_device() const {
-	return _device;
-}
-
 void App::set_device(SDL_GPUDevice* device) {
 	_device = device;
-}
-
-SDL_GPUBuffer* App::get_vertex_buff() const {
-	return _vertex_buff;
-}
-
-SDL_GPUBuffer* App::get_index_buff() const {
-	return _index_buff;
-}
-
-SDL_GPUGraphicsPipeline* App::get_graphics_pipeline() const {
-	return _graphics_pipeline;
 }
 
 void App::terminate() {
@@ -387,7 +430,8 @@ bool App::should_exit() const {
 }
 
 void App::cleanup() {
-	SDL_ReleaseGPUTexture(_device, _texture);
+	SDL_ReleaseGPUTexture(_device, _texture->_data);
+	delete(_texture);
 	SDL_ReleaseGPUBuffer(_device, _vertex_buff);
 	SDL_ReleaseGPUBuffer(_device, _index_buff);
 	SDL_ReleaseGPUSampler(_device, _sampler);

@@ -1,6 +1,5 @@
 module;
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_gpu.h>
 #include <glm/glm.hpp>
 
 export module app;
@@ -44,37 +43,54 @@ struct UniformBuffer {
 	glm::mat4 proj;
 };
 
+struct Controller {
+	glm::vec3 _pos{{}};
+	float _angle = 0;
+	std::uint32_t _speed = 7;
+	bool move_left = false;
+	bool move_right = false;
+	bool move_further = false;
+	bool move_closer = false;
+	bool move_up = false;
+	bool move_down = false;
+};
+
+struct Texture {
+	SDL_GPUTexture* _data;
+	Controller _controller{};
+
+	Texture(SDL_GPUTexture* texture) : _data(texture) {}
+};
+
 
 export class App {
 public:
 	App();
 
-	void cleanup();
-	[[nodiscard]] SDL_AppResult iterate() const;
+	[[nodiscard]] SDL_AppResult iterate();
 	[[nodiscard]] SDL_AppResult handle_event(SDL_Event* event);
-	[[nodiscard]] SDL_Window* get_window() const;
-	void set_window(SDL_Window* window);
-	[[nodiscard]] SDL_GPUDevice* get_device() const;
-	void set_device(SDL_GPUDevice* device);
-	void terminate();
-	[[nodiscard]] bool should_exit() const;
-	[[nodiscard]] SDL_GPUBuffer* get_vertex_buff() const;
-	[[nodiscard]] SDL_GPUBuffer* get_index_buff() const;
-	[[nodiscard]] SDL_GPUGraphicsPipeline* get_graphics_pipeline() const;
+	void cleanup();
 
 private:
 	SDL_Window* _window = nullptr;
 	SDL_GPUDevice* _device = nullptr;
-	bool _should_exit = false;
 
 	SDL_GPUBuffer* _vertex_buff = nullptr;
 	SDL_GPUBuffer* _index_buff = nullptr;
-	SDL_GPUTexture* _texture = nullptr;
+	Texture* _texture = nullptr;
+	// SDL_GPUTexture* _texture = nullptr;
 
 	SDL_GPUGraphicsPipeline* _graphics_pipeline = nullptr;
 	SDL_GPUSampler* _sampler = nullptr;
 
+	float _dt{};
+	bool _should_exit = false;
+
+	void set_window(SDL_Window* window);
+	void set_device(SDL_GPUDevice* device);
 	void setup_gpu_resources();
+	void terminate();
+	[[nodiscard]] bool should_exit() const;
 };
 
 // suppressing system/driver leaks
