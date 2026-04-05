@@ -19,7 +19,6 @@ App::App() {
 		SDL_Log("Starting app in Debug mode");
 	else
 		SDL_Log("Starting app in release mode");
-
 }
 
 void App::init() {
@@ -34,12 +33,11 @@ void App::init() {
 	auto* window = SDL_CreateWindow("Test", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE);
 	if (!window) {
 		SDL_Log("Failed to create window: %s", SDL_GetError());
+		exit(1);
 	}
 	set_window(window);
 
-	SDL_GPUVulkanOptions vulkan_opts {
-		.vulkan_api_version = make_vk_version(1, 3, 0),
-	};
+	SDL_GPUVulkanOptions vulkan_opts { .vulkan_api_version = make_vk_version(1, 3, 0) };
 	SDL_PropertiesID gpu_props = SDL_CreateProperties();
 	SDL_SetBooleanProperty(gpu_props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
 	SDL_SetBooleanProperty(gpu_props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, enable_debug);
@@ -294,8 +292,8 @@ SDL_AppResult App::iterate() {
 	if (should_exit())
 		return SDL_APP_SUCCESS;
 
-	// get swapchain
 	auto* cmd_buff = SDL_AcquireGPUCommandBuffer(_device);
+	// get swapchain
 	SDL_GPUTexture* swapchain = nullptr;
 	SDL_WaitAndAcquireGPUSwapchainTexture(cmd_buff, _window, &swapchain, nullptr, nullptr);
 	if (!swapchain) {
@@ -588,9 +586,8 @@ void App::load_model() {
 			model_path = TITANIC_MODEL;
 			break;
 	}
-	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, model_path.c_str(), basedir.c_str())) {
+	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, model_path.c_str(), basedir.c_str()))
 		throw std::runtime_error(warn + err);
-	}
 
 	std::unordered_map<Vertex, std::uint32_t> unique_vertices;
 	for (const auto& shape: shapes) {
@@ -632,6 +629,7 @@ void App::load_model() {
 	std::cout << "Successfully loaded model, uniquevertices = " << _vertices.size() << '\n';
 }
 
+// overly lenient and no checking for now.
 void App::arguments(int argc, char** argv) {
 	for (int i = 1; i < argc; i++) {
 		std::string request(argv[i]);

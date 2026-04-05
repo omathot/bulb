@@ -52,6 +52,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tinyobjloader)
 
+FetchContent_Declare(
+       tinygltf
+       GIT_REPOSITORY https://github.com/syoyo/tinygltf.git
+       GIT_TAG        v3.0.0
+       SYSTEM
+)
+FetchContent_MakeAvailable(tinygltf)
+
 
 find_package(glm REQUIRED)
 
@@ -122,6 +130,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   SDL3_shadercross::SDL3_shadercross
   glm::glm
   tinyobjloader
+  tinygltf
 )
 
 
