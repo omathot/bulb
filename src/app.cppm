@@ -35,19 +35,28 @@ struct Vertex {
 	glm::vec3 pos;
 	glm::vec3 color;
 	glm::vec2 uv;
+	glm::vec3 normal;
 
 	bool operator==(const Vertex &other) const {
 		return pos == other.pos &&
 			color == other.color &&
-			uv == other.uv;
+			uv == other.uv &&
+			normal == other.normal;
 	}
 };
+// 0x9e3779b9 magic constant is from golden ratio? apparently spreads bits well and avoids collision issues.
+inline void hash_combine(size_t& seed, size_t hash) {
+	seed ^= hash + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
 template <>
 struct std::hash<Vertex> {
 	size_t operator()(Vertex const &vertex) const noexcept {
-		return ((hash<glm::vec3>()(vertex.pos) ^
-				(hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
-				(hash<glm::vec2>()(vertex.uv) << 1);
+		size_t h = 0;
+		hash_combine(h, hash<glm::vec3>()(vertex.pos));
+		hash_combine(h, hash<glm::vec3>()(vertex.color));
+		hash_combine(h, hash<glm::vec2>()(vertex.uv));
+		hash_combine(h, hash<glm::vec3>()(vertex.normal));
+		return h;
 	}
 };
 
@@ -55,6 +64,12 @@ struct UniformBuffer {
 	glm::mat4 model;
 	glm::mat4 view;
 	glm::mat4 proj;
+};
+struct LightBuffer {
+	alignas(16) glm::vec3 light_dir;
+	alignas(16) glm::vec3 light_color;
+	alignas(16) glm::vec3 camera_pos;
+	float enabled = 1.0f;
 };
 
 struct Controller {
@@ -141,6 +156,7 @@ private:
 	SDL_GPUBuffer* _index_buff = nullptr;
 
 	SDL_GPUGraphicsPipeline* _graphics_pipeline = nullptr;
+	SDL_GPUGraphicsPipeline* _wireframe_pipeline = nullptr;
 	SDL_GPUSampler* _sampler = nullptr;
 
 	std::unique_ptr<Camera> _camera;
@@ -148,6 +164,8 @@ private:
 	float _dt{};
 	bool _should_exit = false;
 	bool _mouse_captured = false;
+	bool _lighting_enabled = false;
+	bool _wireframe = false;
 
 	void set_window(SDL_Window* window);
 	void set_device(SDL_GPUDevice* device);

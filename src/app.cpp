@@ -59,7 +59,7 @@ App::App() {
 }
 
 void App::setup_gpu_resources() {
-	_texture_manager->load(MINECRAFT_CASTLE_TEXTURE);
+	_texture_manager->load(TITANIC_TEXTURE);
 	load_model();
 	// sampler
 	SDL_GPUSamplerCreateInfo sampler_info {
@@ -106,7 +106,7 @@ void App::setup_gpu_resources() {
 		.num_samplers = 1,
 		.num_storage_textures = 0,
 		.num_storage_buffers = 0,
-		.num_uniform_buffers = 0,
+		.num_uniform_buffers = 1,
 	};
 	SDL_GPUShader* vert_shader = SDL_CreateGPUShader(_device, &vert_info);
 	if (!vert_shader) {
@@ -123,25 +123,32 @@ void App::setup_gpu_resources() {
 		.pitch = sizeof(Vertex),
 		.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
 	};
-	std::array<SDL_GPUVertexAttribute, 3> vertex_attributes = {
+	// ! IMPORTANT: If adding, don't forget to bump num_vertex_attributes below!
+	std::array<SDL_GPUVertexAttribute, 4> vertex_attributes = {
 		{
 			{ // pos
 				.location = 0,
 				.buffer_slot = 0,
 				.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
-				.offset = 0 // first member
+				.offset = 0
 			},
 			{ // color
 				.location = 1,
 				.buffer_slot = 0,
 				.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
-				.offset = sizeof(glm::vec3) // comes after pos (glm vec3)
+				.offset = sizeof(glm::vec3)
 			},
 			{ // uv
 				.location = 2,
 				.buffer_slot = 0,
 				.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-				.offset = sizeof(glm::vec3) + sizeof(glm::vec3),
+				.offset = sizeof(glm::vec3) * 2,
+			},
+			{ // normal
+				.location = 3,
+				.buffer_slot = 0,
+				.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+				.offset = (sizeof(glm::vec3) * 2) + sizeof(glm::vec2),
 			}
 		}
 	};
@@ -150,13 +157,13 @@ void App::setup_gpu_resources() {
 		.vertex_buffer_descriptions = &vertex_buff_desc,
 		.num_vertex_buffers = 1,
 		.vertex_attributes = static_cast<const SDL_GPUVertexAttribute*>(vertex_attributes.data()),
-		.num_vertex_attributes = 3,
+		.num_vertex_attributes = 4,
 	};
 	SDL_GPUColorTargetDescription color_target {
 		.format = SDL_GetGPUSwapchainTextureFormat(_device, _window),
 	};
 
-	SDL_GPUGraphicsPipelineCreateInfo pipeline_info {
+	SDL_GPUGraphicsPipelineCreateInfo graphics_pipeline_info {
 		.vertex_shader = vert_shader,
 		.fragment_shader = frag_shader,
 		.vertex_input_state = vertex_input,
@@ -173,8 +180,29 @@ void App::setup_gpu_resources() {
 			.has_depth_stencil_target = true,
 		},
 	};
+	SDL_GPUGraphicsPipelineCreateInfo wireframe_pipeline_info {
+		.vertex_shader = vert_shader,
+		.fragment_shader = frag_shader,
+		.vertex_input_state = vertex_input,
+		.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+		.rasterizer_state = {
+			.fill_mode = SDL_GPU_FILLMODE_LINE,
+		},
+		.depth_stencil_state = {
+			.compare_op = SDL_GPU_COMPAREOP_LESS,
+			.enable_depth_test = true,
+			.enable_depth_write = true,
+		},
+		.target_info = {
+			.color_target_descriptions = &color_target,
+			.num_color_targets = 1,
+			.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT,
+			.has_depth_stencil_target = true,
+		},
+	};
 
-	_graphics_pipeline = SDL_CreateGPUGraphicsPipeline(_device, &pipeline_info);
+	_graphics_pipeline = SDL_CreateGPUGraphicsPipeline(_device, &graphics_pipeline_info);
+	_wireframe_pipeline = SDL_CreateGPUGraphicsPipeline(_device, &wireframe_pipeline_info);
 	SDL_ReleaseGPUShader(_device, frag_shader);
 	SDL_ReleaseGPUShader(_device, vert_shader);
 
@@ -269,7 +297,10 @@ SDL_AppResult App::iterate() {
 		.store_op = SDL_GPU_STOREOP_DONT_CARE,
 	};
 	auto* render_pass = SDL_BeginGPURenderPass(cmd_buff, &color_info, 1, &depth_target);
-	SDL_BindGPUGraphicsPipeline(render_pass, _graphics_pipeline);
+	if (_wireframe)
+		SDL_BindGPUGraphicsPipeline(render_pass, _wireframe_pipeline);
+	else
+		SDL_BindGPUGraphicsPipeline(render_pass, _graphics_pipeline);
 	int w = 0, h = 0;
 	SDL_GetWindowSizeInPixels(_window, &w, &h);
 	// SDL defaults to full, just like being explicit
@@ -307,16 +338,22 @@ SDL_AppResult App::iterate() {
 
 	float aspect = static_cast<float>(w) / static_cast<float>(h);
 	glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 300.0f); // last arg is where depth will clamp and stop rendering past that distance
+	glm::mat4 model = glm::mat4(1.0f);
+	model = glm::scale(model, glm::vec3(0.1f));
+	model = glm::rotate(model, tex->_controller._angle, glm::vec3(0.0f, 1.0f, 0.0f));
 	UniformBuffer ubo {
-		.model = glm::rotate(
-			glm::mat4(1.0f),
-			tex->_controller._angle,
-			glm::vec3(0.0f, 1.0f, 0.0f) // axis to rotate around
-		),
+		.model = model,
 		.view = _camera->view_matrix(),
 		.proj = proj
 	};
 	SDL_PushGPUVertexUniformData(cmd_buff, 0, &ubo, sizeof(ubo));
+	LightBuffer light_data {
+		.light_dir = glm::normalize(glm::vec3(-1.0f, -1.0f, -0.5f)),
+		.light_color = glm::vec3(1.0f),
+		.camera_pos = _camera->_pos,
+		.enabled = _lighting_enabled ? 1.0f : 0.0f,
+	};
+	SDL_PushGPUFragmentUniformData(cmd_buff, 0, &light_data, sizeof(light_data));
 
 	// bindings
 	SDL_GPUBufferBinding index_binding {
@@ -331,8 +368,14 @@ SDL_AppResult App::iterate() {
 		.texture = _texture_manager->get_tex()->_data,
 		.sampler = _sampler,
 	};
+	if (_wireframe)
+		SDL_BindGPUIndexBuffer(render_pass, &index_binding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 	SDL_BindGPUIndexBuffer(render_pass, &index_binding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+	if (_wireframe)
+		SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_binding, 1);
 	SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_binding, 1);
+	if (_wireframe)
+		SDL_BindGPUFragmentSamplers(render_pass, 0, &sampler_binding, 1);
 	SDL_BindGPUFragmentSamplers(render_pass, 0, &sampler_binding, 1);
 
 	// draw
@@ -408,6 +451,13 @@ SDL_AppResult App::handle_event(SDL_Event* event) {
 					_mouse_captured = !_mouse_captured;
 					SDL_SetWindowRelativeMouseMode(_window, _mouse_captured);
 					break;
+				case SDLK_L:
+					_lighting_enabled = !_lighting_enabled;
+					SDL_Log("Lighting enabled: %d", _lighting_enabled);
+					break;
+				case SDLK_Z:
+					_wireframe = !_wireframe;
+					break;
 				default:
 					SDL_Log("key down: %s", SDL_GetKeyName(event->key.key));
 					break;
@@ -470,6 +520,7 @@ void App::cleanup() {
 	SDL_ReleaseGPUBuffer(_device, _index_buff);
 	SDL_ReleaseGPUSampler(_device, _sampler);
 	SDL_ReleaseGPUGraphicsPipeline(_device, _graphics_pipeline);
+	SDL_ReleaseGPUGraphicsPipeline(_device, _wireframe_pipeline);
 	SDL_ReleaseWindowFromGPUDevice(_device, _window);
 	SDL_DestroyGPUDevice(_device);
 	SDL_DestroyWindow(_window);
@@ -501,7 +552,7 @@ void App::load_model() {
 	std::string warn, err;
 	std::string basedir = "/home/omathot/dev/cpp/bulb/assets/models/";
 
-	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MINECRAFT_CASTLE_MODEL.c_str(), basedir.c_str())) {
+	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, TITANIC_MODEL.c_str(), basedir.c_str())) {
 		throw std::runtime_error(warn + err);
 	}
 
@@ -523,6 +574,17 @@ void App::load_model() {
 				vertex.uv = {0.0f, 0.0f};
 			}
 			vertex.color = {1.0f, 1.0f, 1.0f};
+
+			if (idx.normal_index >= 0) {
+				vertex.normal = {
+					attrib.normals[(3 * static_cast<ulong>(idx.normal_index)) + 0],
+					attrib.normals[(3 * static_cast<ulong>(idx.normal_index)) + 1],
+					attrib.normals[(3 * static_cast<ulong>(idx.normal_index)) + 2],
+				};
+			} else {
+				SDL_Log("Used fallback for normal");
+				vertex.normal = {0.0f, 1.0f, 0.0f};
+			}
 
 			if (!unique_vertices.contains(vertex)) {
 				unique_vertices[vertex] = static_cast<std::uint32_t>(_vertices.size());
