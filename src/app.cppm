@@ -62,6 +62,18 @@ struct Texture {
 	Texture(SDL_GPUTexture* texture) : _data(texture) {}
 };
 
+export class TextureManager {
+public:
+	explicit TextureManager(SDL_GPUDevice* device);
+	Texture* load(const std::string& path);
+	[[nodiscard]] Texture* get_tex() const;
+	void cleanup();
+
+private:
+	SDL_GPUDevice* _device;
+	std::vector<std::unique_ptr<Texture>> _textures;
+};
+
 
 export class App {
 public:
@@ -77,7 +89,7 @@ private:
 
 	SDL_GPUBuffer* _vertex_buff = nullptr;
 	SDL_GPUBuffer* _index_buff = nullptr;
-	Texture* _texture = nullptr;
+	std::unique_ptr<TextureManager> _texture_manager;
 	// SDL_GPUTexture* _texture = nullptr;
 
 	SDL_GPUGraphicsPipeline* _graphics_pipeline = nullptr;

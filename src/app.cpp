@@ -50,12 +50,14 @@ App::App() {
 	const auto* name = SDL_GetStringProperty(device_props, SDL_PROP_GPU_DEVICE_NAME_STRING, "unknown");
 	SDL_Log("Picked device: %s", name);
 	SDL_Log("using driver: %s", SDL_GetGPUDeviceDriver(_device));
+	_texture_manager = std::make_unique<TextureManager>(_device);
 
 	SDL_ClaimWindowForGPUDevice(_device, _window);
 	setup_gpu_resources();
 }
 
 void App::setup_gpu_resources() {
+	_texture_manager->load(TEXTURE_PATH);
 	// sampler
 	SDL_GPUSamplerCreateInfo sampler_info {
 		.min_filter = SDL_GPU_FILTER_LINEAR,
@@ -168,31 +170,9 @@ void App::setup_gpu_resources() {
 		.props = 0
 	};
 	auto* index_buff = SDL_CreateGPUBuffer(_device, &index_info);
-
-	// texture
-	int tex_width = 0, tex_height = 0, tex_channels = 0;
-	stbi_uc* pixels{};
-	pixels = stbi_load(TEXTURE_PATH.c_str(), &tex_width, &tex_height, &tex_channels, STBI_rgb_alpha);
-	if (!pixels) {
-		SDL_Log("Failed to get pixels from texture");
-		exit(1);
-	}
-	std::uint32_t tex_size = static_cast<std::uint32_t>(tex_height) * static_cast<std::uint32_t>(tex_width) * 4;
-	SDL_GPUTextureCreateInfo tex_info {
-		.type = SDL_GPU_TEXTURETYPE_2D,
-		.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-		.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
-		.width = static_cast<std::uint32_t>(tex_width),
-		.height = static_cast<std::uint32_t>(tex_height),
-		.layer_count_or_depth = 1,
-		.num_levels = 1,
-	};
-	_texture = new Texture(SDL_CreateGPUTexture(_device, &tex_info)); // NOLINT
-
-	// big enough for both buffs + texture
 	SDL_GPUTransferBufferCreateInfo transfer_info {
 		.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-		.size = vertex_size + index_size + tex_size,
+		.size = vertex_size + index_size,
 		.props = 0,
 	};
 	auto* transfer_buff = SDL_CreateGPUTransferBuffer(_device, &transfer_info);
@@ -204,9 +184,7 @@ void App::setup_gpu_resources() {
 	}
 	SDL_memcpy(data, vertices.data(), vertex_size);
 	SDL_memcpy(data + vertex_size, indices.data(), index_size);
-	SDL_memcpy(data + vertex_size + index_size, pixels, tex_size);
 	SDL_UnmapGPUTransferBuffer(_device, transfer_buff);
-	stbi_image_free(pixels);
 
 	auto* cmd_buff = SDL_AcquireGPUCommandBuffer(_device);
 	auto* copy_pass = SDL_BeginGPUCopyPass(cmd_buff);
@@ -234,20 +212,6 @@ void App::setup_gpu_resources() {
 		.size = index_size
 	};
 	SDL_UploadToGPUBuffer(copy_pass, &index_src, &index_dst, false);
-
-	// upload texture
-	SDL_GPUTextureTransferInfo tex_src {
-		.transfer_buffer = transfer_buff,
-		.offset = vertex_size + index_size,
-	};
-	SDL_GPUTextureRegion tex_dst {
-		.texture = _texture->_data,
-		.w = static_cast<std::uint32_t>(tex_width),
-		.h = static_cast<std::uint32_t>(tex_height),
-		.d = 1,
-	};
-	SDL_UploadToGPUTexture(copy_pass, &tex_src, &tex_dst, false);
-
 
 	SDL_EndGPUCopyPass(copy_pass);
 	SDL_SubmitGPUCommandBuffer(cmd_buff);
@@ -287,25 +251,26 @@ SDL_AppResult App::iterate() {
 	total_time += _dt;
 
 	// update texture pos
-	auto speed = _texture->_controller._speed;
-	if (_texture->_controller.move_left)
-		_texture->_controller._pos.x -= static_cast<float>(speed) * _dt;
-	if (_texture->_controller.move_right)
-		_texture->_controller._pos.x += static_cast<float>(speed) * _dt;
-	if (_texture->_controller.move_further)
-		_texture->_controller._pos.z -= static_cast<float>(speed) * _dt;
-	if (_texture->_controller.move_closer)
-		_texture->_controller._pos.z += static_cast<float>(speed) * _dt;
-	if (_texture->_controller.move_up)
-		_texture->_controller._pos.y += static_cast<float>(speed) * _dt;
-	if (_texture->_controller.move_down)
-		_texture->_controller._pos.y -= static_cast<float>(speed) * _dt;
+	auto* tex = _texture_manager->get_tex();
+	auto speed = tex->_controller._speed;
+	if (tex->_controller.move_left)
+		tex->_controller._pos.x -= static_cast<float>(speed) * _dt;
+	if (tex->_controller.move_right)
+		tex->_controller._pos.x += static_cast<float>(speed) * _dt;
+	if (tex->_controller.move_further)
+		tex->_controller._pos.z -= static_cast<float>(speed) * _dt;
+	if (tex->_controller.move_closer)
+		tex->_controller._pos.z += static_cast<float>(speed) * _dt;
+	if (tex->_controller.move_up)
+		tex->_controller._pos.y += static_cast<float>(speed) * _dt;
+	if (tex->_controller.move_down)
+		tex->_controller._pos.y -= static_cast<float>(speed) * _dt;
 
 
 	float aspect = static_cast<float>(WINDOW_WIDTH) / static_cast<float>(WINDOW_HEIGHT);
 	glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 10.0f);
 	float angle = total_time * glm::radians(90.0f);
-	glm::mat4 identity = glm::translate(glm::mat4(1.0f), _texture->_controller._pos);
+	glm::mat4 identity = glm::translate(glm::mat4(1.0f), tex->_controller._pos);
 	UniformBuffer ubo {
 		.model = glm::rotate(
 			identity, // input matrix
@@ -331,7 +296,7 @@ SDL_AppResult App::iterate() {
 		.offset = 0,
 	};
 	SDL_GPUTextureSamplerBinding sampler_binding {
-		.texture = _texture->_data,
+		.texture = tex->_data,
 		.sampler = _sampler,
 	};
 	SDL_BindGPUIndexBuffer(render_pass, &index_binding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
@@ -358,22 +323,22 @@ SDL_AppResult App::handle_event(SDL_Event* event) {
 					terminate();
 					break;
 				case SDLK_A:
-					_texture->_controller.move_left = true;
+					_texture_manager->get_tex()->_controller.move_left = true;
 					break;
 				case SDLK_D:
-					_texture->_controller.move_right = true;
+					_texture_manager->get_tex()->_controller.move_right = true;
 					break;
 				case SDLK_W:
-					_texture->_controller.move_further = true;
+					_texture_manager->get_tex()->_controller.move_further = true;
 					break;
 				case SDLK_S:
-					_texture->_controller.move_closer = true;
+					_texture_manager->get_tex()->_controller.move_closer = true;
 					break;
 				case SDLK_UP:
-					_texture->_controller.move_up = true;
+					_texture_manager->get_tex()->_controller.move_up = true;
 					break;
 				case SDLK_DOWN:
-					_texture->_controller.move_down = true;
+					_texture_manager->get_tex()->_controller.move_down = true;
 					break;
 				default:
 					SDL_Log("key down: %s", SDL_GetKeyName(event->key.key));
@@ -383,22 +348,22 @@ SDL_AppResult App::handle_event(SDL_Event* event) {
 		case SDL_EVENT_KEY_UP:
 			switch (event->key.key) {
 				case SDLK_A:
-					_texture->_controller.move_left = false;
+					_texture_manager->get_tex()->_controller.move_left = false;
 					break;
 				case SDLK_D:
-					_texture->_controller.move_right = false;
+					_texture_manager->get_tex()->_controller.move_right = false;
 					break;
 				case SDLK_W:
-					_texture->_controller.move_further = false;
+					_texture_manager->get_tex()->_controller.move_further = false;
 					break;
 				case SDLK_S:
-					_texture->_controller.move_closer = false;
+					_texture_manager->get_tex()->_controller.move_closer = false;
 					break;
 				case SDLK_UP:
-					_texture->_controller.move_up = false;
+					_texture_manager->get_tex()->_controller.move_up = false;
 					break;
 				case SDLK_DOWN:
-					_texture->_controller.move_down = false;
+					_texture_manager->get_tex()->_controller.move_down = false;
 					break;
 				default:
 					break;
@@ -430,8 +395,7 @@ bool App::should_exit() const {
 }
 
 void App::cleanup() {
-	SDL_ReleaseGPUTexture(_device, _texture->_data);
-	delete(_texture);
+	_texture_manager->cleanup();
 	SDL_ReleaseGPUBuffer(_device, _vertex_buff);
 	SDL_ReleaseGPUBuffer(_device, _index_buff);
 	SDL_ReleaseGPUSampler(_device, _sampler);
