@@ -55,6 +55,7 @@ App::App() {
 
 	SDL_ClaimWindowForGPUDevice(_device, _window);
 	setup_gpu_resources();
+	_camera = std::make_unique<Camera>();
 }
 
 void App::setup_gpu_resources() {
@@ -247,6 +248,7 @@ SDL_AppResult App::iterate() {
 	if (should_exit())
 		return SDL_APP_SUCCESS;
 
+	// get swapchain
 	auto* cmd_buff = SDL_AcquireGPUCommandBuffer(_device);
 	SDL_GPUTexture* swapchain = nullptr;
 	SDL_WaitAndAcquireGPUSwapchainTexture(cmd_buff, _window, &swapchain, nullptr, nullptr);
@@ -268,7 +270,18 @@ SDL_AppResult App::iterate() {
 	};
 	auto* render_pass = SDL_BeginGPURenderPass(cmd_buff, &color_info, 1, &depth_target);
 	SDL_BindGPUGraphicsPipeline(render_pass, _graphics_pipeline);
-
+	int w = 0, h = 0;
+	SDL_GetWindowSizeInPixels(_window, &w, &h);
+	// SDL defaults to full, just like being explicit
+	SDL_GPUViewport viewport {
+		.x = 0.0f,
+		.y = 0.0f,
+		.w = static_cast<float>(w),
+		.h = static_cast<float>(h),
+		.min_depth = 0.0f,
+		.max_depth = 1.0f,
+	};
+	SDL_SetGPUViewport(render_pass, &viewport);
 
 	// push constants
 	static auto start_time = std::chrono::high_resolution_clock::now();
@@ -276,42 +289,31 @@ SDL_AppResult App::iterate() {
 	_dt = std::chrono::duration<float>(current_time - start_time).count();
 	start_time = current_time;
 
-	// update texture pos
+	if (_camera->move_forwards)
+		_camera->_pos += _camera->front() * _camera->_speed * _dt;
+	if (_camera->move_backwards)
+		_camera->_pos -= _camera->front() * _camera->_speed * _dt;
+	if (_camera->move_left)
+		_camera->_pos -= _camera->right() * _camera->_speed * _dt;
+	if (_camera->move_right)
+		_camera->_pos += _camera->right() * _camera->_speed * _dt;
+	if (_camera->move_up)
+		_camera->_pos.y += _camera->_speed * _dt;
+	if (_camera->move_down)
+		_camera->_pos.y -= _camera->_speed * _dt;
 	auto* tex = _texture_manager->get_tex();
-	auto speed = tex->_controller._speed;
-	if (tex->_controller.move_left)
-		tex->_controller._pos.x -= static_cast<float>(speed) * _dt;
-	if (tex->_controller.move_right)
-		tex->_controller._pos.x += static_cast<float>(speed) * _dt;
-	if (tex->_controller.move_further)
-		tex->_controller._pos.z -= static_cast<float>(speed) * _dt;
-	if (tex->_controller.move_closer)
-		tex->_controller._pos.z += static_cast<float>(speed) * _dt;
-	if (tex->_controller.move_up)
-		tex->_controller._pos.y += static_cast<float>(speed) * _dt;
-	if (tex->_controller.move_down)
-		tex->_controller._pos.y -= static_cast<float>(speed) * _dt;
 	if (!tex->_controller.pause)
 	    tex->_controller._angle += _dt * glm::radians(static_cast<float>(tex->_controller._rot_speed));
 
-
-
-	int w = 0, h = 0;
-	SDL_GetWindowSizeInPixels(_window, &w, &h);
 	float aspect = static_cast<float>(w) / static_cast<float>(h);
-	glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 10.0f);
-	glm::mat4 identity = glm::translate(glm::mat4(1.0f), tex->_controller._pos);
+	glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
 	UniformBuffer ubo {
 		.model = glm::rotate(
-			identity, // input matrix
+			glm::mat4(1.0f),
 			tex->_controller._angle,
 			glm::vec3(0.0f, 1.0f, 0.0f) // axis to rotate around
 		),
-		.view = glm::lookAt(
-			glm::vec3(2.0f, 2.0f, 2.0f),
-			glm::vec3(0.0f, 0.0, 0.0f),
-			glm::vec3(0.0f, 1.0f, 0.0f)
-		),
+		.view = _camera->view_matrix(),
 		.proj = proj
 	};
 	SDL_PushGPUVertexUniformData(cmd_buff, 0, &ubo, sizeof(ubo));
@@ -326,7 +328,7 @@ SDL_AppResult App::iterate() {
 		.offset = 0,
 	};
 	SDL_GPUTextureSamplerBinding sampler_binding {
-		.texture = tex->_data,
+		.texture = _texture_manager->get_tex()->_data,
 		.sampler = _sampler,
 	};
 	SDL_BindGPUIndexBuffer(render_pass, &index_binding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
@@ -364,32 +366,48 @@ SDL_AppResult App::handle_event(SDL_Event* event) {
 				};
 				_depth_texture = SDL_CreateGPUTexture(_device, &depth_info);
 				break;
-			}
+		}
+		case SDL_EVENT_MOUSE_MOTION: {
+			if (!_mouse_captured)
+				break;
+			_camera->_yaw += event->motion.xrel * _camera->_sensitivity;
+			_camera->_pitch -= event->motion.yrel * _camera->_sensitivity;
+			// clamp
+			if (_camera->_pitch > 89.0f) // NOLINT
+				_camera->_pitch = 89.0f;
+			if (_camera->_pitch < -89.0f) // NOLINT
+				_camera->_pitch = -89.0f;
+			break;
+		}
 		case SDL_EVENT_KEY_DOWN:
 			switch (event->key.key) {
 				case SDLK_ESCAPE:
 					terminate();
 					break;
 				case SDLK_A:
-					_texture_manager->get_tex()->_controller.move_left = true;
+					_camera->move_left = true;
 					break;
 				case SDLK_D:
-					_texture_manager->get_tex()->_controller.move_right = true;
+					_camera->move_right = true;
 					break;
 				case SDLK_W:
-					_texture_manager->get_tex()->_controller.move_further = true;
+					_camera->move_forwards = true;
 					break;
 				case SDLK_S:
-					_texture_manager->get_tex()->_controller.move_closer = true;
+					_camera->move_backwards = true;
 					break;
 				case SDLK_UP:
-					_texture_manager->get_tex()->_controller.move_up = true;
+					_camera->move_up = true;
 					break;
 				case SDLK_DOWN:
-					_texture_manager->get_tex()->_controller.move_down = true;
+					_camera->move_down = true;
 					break;
 				case SDLK_SPACE:
 					_texture_manager->get_tex()->_controller.pause = !_texture_manager->get_tex()->_controller.pause;
+					break;
+				case SDLK_TAB:
+					_mouse_captured = !_mouse_captured;
+					SDL_SetWindowRelativeMouseMode(_window, _mouse_captured);
 					break;
 				default:
 					SDL_Log("key down: %s", SDL_GetKeyName(event->key.key));
@@ -399,22 +417,22 @@ SDL_AppResult App::handle_event(SDL_Event* event) {
 		case SDL_EVENT_KEY_UP:
 			switch (event->key.key) {
 				case SDLK_A:
-					_texture_manager->get_tex()->_controller.move_left = false;
+					_camera->move_left = false;
 					break;
 				case SDLK_D:
-					_texture_manager->get_tex()->_controller.move_right = false;
+					_camera->move_right = false;
 					break;
 				case SDLK_W:
-					_texture_manager->get_tex()->_controller.move_further = false;
+					_camera->move_forwards = false;
 					break;
 				case SDLK_S:
-					_texture_manager->get_tex()->_controller.move_closer = false;
+					_camera->move_backwards = false;
 					break;
 				case SDLK_UP:
-					_texture_manager->get_tex()->_controller.move_up = false;
+					_camera->move_up = false;
 					break;
 				case SDLK_DOWN:
-					_texture_manager->get_tex()->_controller.move_down = false;
+					_camera->move_down = false;
 					break;
 				default:
 					break;

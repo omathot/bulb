@@ -84,6 +84,35 @@ private:
 	std::vector<std::unique_ptr<Texture>> _textures;
 };
 
+struct Camera {
+	glm::vec3 _pos{2.0f, 2.0f, 2.0f};
+	float _yaw = -135.0f;
+	float _pitch = -30.0f;
+	float _speed = 5.0f;
+	float _sensitivity = 0.1f;
+
+	bool move_left = false;
+	bool move_right = false;
+	bool move_forwards = false;
+	bool move_backwards = false;
+	bool move_up = false;
+	bool move_down = false;
+
+	[[nodiscard]] glm::vec3 front() const {
+		return glm::normalize(glm::vec3{
+			cos(glm::radians(_yaw)) * cos(glm::radians(_pitch)),
+			sin(glm::radians(_pitch)),
+			sin(glm::radians(_yaw)) * cos(glm::radians(_pitch))
+		});
+	}
+	[[nodiscard]] glm::vec3 right() const {
+		return glm::normalize(glm::cross(front(), glm::vec3(0.0f, 1.0f, 0.0f)));
+	}
+	[[nodiscard]] glm::mat4 view_matrix() const {
+		return glm::lookAt(_pos, _pos + front(), glm::vec3(0.0f, 1.0f, 0.0f));
+	}
+};
+
 
 export class App {
 public:
@@ -108,8 +137,11 @@ private:
 	SDL_GPUGraphicsPipeline* _graphics_pipeline = nullptr;
 	SDL_GPUSampler* _sampler = nullptr;
 
+	std::unique_ptr<Camera> _camera;
+
 	float _dt{};
 	bool _should_exit = false;
+	bool _mouse_captured = false;
 
 	void set_window(SDL_Window* window);
 	void set_device(SDL_GPUDevice* device);

@@ -8,7 +8,7 @@ import std;
 TextureManager::TextureManager(SDL_GPUDevice* device) : _device(device) {}
 
 Texture* TextureManager::load(const std::string& path) {
-	// texture
+	// load
 	int tex_width = 0, tex_height = 0, tex_channels = 0;
 	stbi_uc* pixels{};
 	pixels = stbi_load(path.c_str(), &tex_width, &tex_height, &tex_channels, STBI_rgb_alpha);
@@ -28,6 +28,7 @@ Texture* TextureManager::load(const std::string& path) {
 	};
 	auto texture = std::make_unique<Texture>(Texture(SDL_CreateGPUTexture(_device, &tex_info))); // NOLINT
 
+	// transfer
 	SDL_GPUTransferBufferCreateInfo transfer_info {
 		.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
 		.size = tex_size,
@@ -60,10 +61,11 @@ Texture* TextureManager::load(const std::string& path) {
 	};
 	SDL_UploadToGPUTexture(copy_pass, &tex_src, &tex_dst, false);
 
-
 	SDL_EndGPUCopyPass(copy_pass);
 	SDL_SubmitGPUCommandBuffer(cmd_buff);
 	SDL_ReleaseGPUTransferBuffer(_device, transfer_buff);
+
+	// store ref
 	_textures.push_back(std::move(texture));
 	return _textures.back().get();
 }
