@@ -10,7 +10,6 @@ import std;
 
 const std::string FRAGMENT_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/fragment.spv";
 const std::string VERTEX_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/vertex.spv";
-const std::string TEXTURE_PATH = "/home/omathot/dev/cpp/bulb/assets/textures/fern_red.png";
 
 const std::string VIKING_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/viking_room.obj";
 const std::string VIKING_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/viking_room.png";
@@ -18,8 +17,8 @@ const std::string VIKING_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/v
 const std::string TITANIC_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/Titanic.obj";
 const std::string TITANIC_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/Titanic.jpeg";
 
-const std::string MINECRAFT_CASTLE_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/minecraft_castle.obj";
-const std::string MINECRAFT_CASTLE_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/minecraft_castle.jpg";
+const std::string MINECRAFT_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/minecraft_castle.obj";
+const std::string MINECRAFT_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/minecraft_castle.jpg";
 
 constexpr std::uint32_t WINDOW_WIDTH = 800;
 constexpr std::uint32_t WINDOW_HEIGHT = 600;
@@ -134,11 +133,24 @@ struct Camera {
 	}
 };
 
+enum class ModelRequest : std::uint8_t {
+	minecraft,
+	titanic,
+	viking,
+	unknown,
+};
+enum class ScaleRequest : std::uint8_t {
+	scaled_up,
+	scaled_down,
+	unknown,
+};
 
 export class App {
 public:
 	App();
 
+	void arguments(int argc, char **argv);
+	void init();
 	[[nodiscard]] SDL_AppResult iterate();
 	[[nodiscard]] SDL_AppResult handle_event(SDL_Event* event);
 	void cleanup();
@@ -166,6 +178,8 @@ private:
 	bool _mouse_captured = false;
 	bool _lighting_enabled = false;
 	bool _wireframe = false;
+	ModelRequest _model_request = ModelRequest::unknown;
+	ScaleRequest _scale_request = ScaleRequest::unknown;
 
 	void set_window(SDL_Window* window);
 	void set_device(SDL_GPUDevice* device);

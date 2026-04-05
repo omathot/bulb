@@ -9,8 +9,12 @@ import app;
 	SDL_APP_FAILUE -> terminate with err
 */
 
-SDL_AppResult SDL_AppInit(void **appstate, int /* argc */, char** /* argv */) {
+SDL_AppResult SDL_AppInit(void **appstate, int argc, char** argv) {
 	App* app = new App(); // NOLINT
+	if (argc > 0) {
+		app->arguments(argc, argv);
+	}
+	app->init();
 	*appstate = app;
 	return SDL_APP_CONTINUE;
 }

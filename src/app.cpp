@@ -20,6 +20,9 @@ App::App() {
 	else
 		SDL_Log("Starting app in release mode");
 
+}
+
+void App::init() {
 	if (!SDL_ShaderCross_Init()) {
 		SDL_Log("Failed to init ShaderCross: %s", SDL_GetError());
 		exit(SDL_APP_FAILURE);
@@ -59,7 +62,22 @@ App::App() {
 }
 
 void App::setup_gpu_resources() {
-	_texture_manager->load(TITANIC_TEXTURE);
+	std::string texture_path;
+	switch (_model_request) {
+		case ModelRequest::minecraft:
+			texture_path = MINECRAFT_TEXTURE;
+			break;
+		case ModelRequest::titanic:
+			texture_path = TITANIC_TEXTURE;
+			break;
+		case ModelRequest::viking:
+			texture_path = VIKING_TEXTURE;
+			break;
+		case ModelRequest::unknown:
+			texture_path = TITANIC_TEXTURE;
+			break;
+	}
+	_texture_manager->load(texture_path);
 	load_model();
 	// sampler
 	SDL_GPUSamplerCreateInfo sampler_info {
@@ -339,7 +357,10 @@ SDL_AppResult App::iterate() {
 	float aspect = static_cast<float>(w) / static_cast<float>(h);
 	glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 300.0f); // last arg is where depth will clamp and stop rendering past that distance
 	glm::mat4 model = glm::mat4(1.0f);
-	model = glm::scale(model, glm::vec3(0.1f));
+	if (_scale_request == ScaleRequest::scaled_down)
+		model = glm::scale(model, glm::vec3(0.1f));
+	else if (_scale_request == ScaleRequest::scaled_up)
+		model = glm::scale(model, glm::vec3(1.5f));
 	model = glm::rotate(model, tex->_controller._angle, glm::vec3(0.0f, 1.0f, 0.0f));
 	UniformBuffer ubo {
 		.model = model,
@@ -550,9 +571,24 @@ void App::load_model() {
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
 	std::string warn, err;
-	std::string basedir = "/home/omathot/dev/cpp/bulb/assets/models/";
+	std::string basedir = "/home/omathot/dev/cpp/bulb/assets/models";
 
-	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, TITANIC_MODEL.c_str(), basedir.c_str())) {
+	std::string model_path;
+	switch (_model_request) {
+		case ModelRequest::minecraft:
+			model_path = MINECRAFT_MODEL;
+			break;
+		case ModelRequest::titanic:
+			model_path = TITANIC_MODEL;
+			break;
+		case ModelRequest::viking:
+			model_path = VIKING_MODEL;
+			break;
+		case ModelRequest::unknown:
+			model_path = TITANIC_MODEL;
+			break;
+	}
+	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, model_path.c_str(), basedir.c_str())) {
 		throw std::runtime_error(warn + err);
 	}
 
@@ -582,7 +618,6 @@ void App::load_model() {
 					attrib.normals[(3 * static_cast<ulong>(idx.normal_index)) + 2],
 				};
 			} else {
-				SDL_Log("Used fallback for normal");
 				vertex.normal = {0.0f, 1.0f, 0.0f};
 			}
 
@@ -595,4 +630,34 @@ void App::load_model() {
 		}
 	}
 	std::cout << "Successfully loaded model, uniquevertices = " << _vertices.size() << '\n';
+}
+
+void App::arguments(int argc, char** argv) {
+	for (int i = 1; i < argc; i++) {
+		std::string request(argv[i]);
+		if (request.contains("minecraft")) {
+			SDL_Log("Request minecraft");
+			_model_request = ModelRequest::minecraft;
+		}
+		else if (request.contains("viking")) {
+			SDL_Log("Request viking");
+			_model_request = ModelRequest::viking;
+		}
+		else if (request.contains("titanic")) {
+			SDL_Log("Request titanic");
+			_model_request = ModelRequest::titanic;
+		}
+		else if (request.contains("scaled_down")) {
+			SDL_Log("requested scaled down");
+			_scale_request = ScaleRequest::scaled_down;
+		}
+		else if (request.contains("scaled_up")) {
+			SDL_Log("requested scaled up");
+			_scale_request = ScaleRequest::scaled_up;
+		}
+		else {
+			SDL_Log("failed to match any request");
+		}
+	}
+
 }
