@@ -59,7 +59,7 @@ App::App() {
 }
 
 void App::setup_gpu_resources() {
-	_texture_manager->load(VIKING_TEXTURE);
+	_texture_manager->load(MINECRAFT_CASTLE_TEXTURE);
 	load_model();
 	// sampler
 	SDL_GPUSamplerCreateInfo sampler_info {
@@ -306,7 +306,7 @@ SDL_AppResult App::iterate() {
 	    tex->_controller._angle += _dt * glm::radians(static_cast<float>(tex->_controller._rot_speed));
 
 	float aspect = static_cast<float>(w) / static_cast<float>(h);
-	glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
+	glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 300.0f); // last arg is where depth will clamp and stop rendering past that distance
 	UniformBuffer ubo {
 		.model = glm::rotate(
 			glm::mat4(1.0f),
@@ -367,7 +367,7 @@ SDL_AppResult App::handle_event(SDL_Event* event) {
 				_depth_texture = SDL_CreateGPUTexture(_device, &depth_info);
 				break;
 		}
-		case SDL_EVENT_MOUSE_MOTION: {
+		case SDL_EVENT_MOUSE_MOTION:
 			if (!_mouse_captured)
 				break;
 			_camera->_yaw += event->motion.xrel * _camera->_sensitivity;
@@ -378,7 +378,6 @@ SDL_AppResult App::handle_event(SDL_Event* event) {
 			if (_camera->_pitch < -89.0f) // NOLINT
 				_camera->_pitch = -89.0f;
 			break;
-		}
 		case SDL_EVENT_KEY_DOWN:
 			switch (event->key.key) {
 				case SDLK_ESCAPE:
@@ -502,7 +501,7 @@ void App::load_model() {
 	std::string warn, err;
 	std::string basedir = "/home/omathot/dev/cpp/bulb/assets/models/";
 
-	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, VIKING_MODEL.c_str(), basedir.c_str())) {
+	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MINECRAFT_CASTLE_MODEL.c_str(), basedir.c_str())) {
 		throw std::runtime_error(warn + err);
 	}
 

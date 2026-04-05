@@ -15,6 +15,12 @@ const std::string TEXTURE_PATH = "/home/omathot/dev/cpp/bulb/assets/textures/fer
 const std::string VIKING_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/viking_room.obj";
 const std::string VIKING_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/viking_room.png";
 
+const std::string TITANIC_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/Titanic.obj";
+const std::string TITANIC_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/Titanic.jpeg";
+
+const std::string MINECRAFT_CASTLE_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/minecraft_castle.obj";
+const std::string MINECRAFT_CASTLE_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/minecraft_castle.jpg";
+
 constexpr std::uint32_t WINDOW_WIDTH = 800;
 constexpr std::uint32_t WINDOW_HEIGHT = 600;
 
