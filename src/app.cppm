@@ -1,5 +1,6 @@
 module;
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_gpu.h>
 #include <glm/glm.hpp>
 
 export module app;
@@ -7,6 +8,7 @@ import std;
 
 const std::string FRAGMENT_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/fragment.spv";
 const std::string VERTEX_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/vertex.spv";
+const std::string TEXTURE_PATH = "/home/omathot/dev/cpp/bulb/assets/fern_red.png";
 
 constexpr std::uint32_t WINDOW_WIDTH = 800;
 constexpr std::uint32_t WINDOW_HEIGHT = 600;
@@ -21,13 +23,16 @@ constexpr std::uint32_t WINDOW_HEIGHT = 600;
 struct Vertex {
 	glm::vec3 pos;
 	glm::vec3 color;
+	glm::vec2 uv;
 };
 
+// Y up
+// "Ground" is XZ
 const std::vector<Vertex> vertices = {
-    {.pos={-0.5f, -0.5f, 0.0f,}, .color={1.0f, 0.0f, 0.0f}},
-    {.pos={0.5f, -0.5f, 0.0f,}, .color={0.0f, 1.0f, 0.0f}},
-    {.pos={0.5f, 0.5f, 0.0f,}, .color={0.0f, 0.0f, 1.0f}},
-    {.pos={-0.5f, 0.5f, 0.0f,}, .color={1.0f, 1.0f, 1.0f}}
+    {.pos={-0.5f, 0.0f, -0.5f}, .color={1.0f, 0.0f, 0.0f}, .uv = {1.0f, 0.0f}},
+    {.pos={0.5f, 0.0f, -0.5f}, .color={0.0f, 1.0f, 0.0f}, .uv = {0.0f, 0.0f,}},
+    {.pos={0.5f, 0.0f, 0.5f}, .color={0.0f, 0.0f, 1.0f}, .uv = {0.0f, 1.0f,}},
+    {.pos={-0.5f, 0.0f, 0.5f}, .color={1.0f, 1.0f, 1.0}, .uv = {1.0f, 1.0f}}
 };
 const std::vector<std::uint16_t> indices = {
     0, 1, 2, 2, 3, 0
@@ -64,8 +69,10 @@ private:
 
 	SDL_GPUBuffer* _vertex_buff = nullptr;
 	SDL_GPUBuffer* _index_buff = nullptr;
+	SDL_GPUTexture* _texture = nullptr;
 
 	SDL_GPUGraphicsPipeline* _graphics_pipeline = nullptr;
+	SDL_GPUSampler* _sampler = nullptr;
 
 	void setup_gpu_resources();
 };
