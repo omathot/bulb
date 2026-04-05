@@ -28,7 +28,6 @@ Texture* TextureManager::load(const std::string& path) {
 	};
 	auto texture = std::make_unique<Texture>(Texture(SDL_CreateGPUTexture(_device, &tex_info))); // NOLINT
 
-	// big enough for both buffs + texture
 	SDL_GPUTransferBufferCreateInfo transfer_info {
 		.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
 		.size = tex_size,

@@ -44,6 +44,15 @@ set(SDLSHADERCROSS_VENDORED ON CACHE BOOL "" FORCE)
 set(SDLSHADERCROSS_DXC OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SDL_shadercross)
 
+FetchContent_Declare(
+       tinyobjloader
+       GIT_REPOSITORY https://github.com/tinyobjloader/tinyobjloader.git
+       GIT_TAG        origin/release
+       SYSTEM
+)
+FetchContent_MakeAvailable(tinyobjloader)
+
+
 find_package(glm REQUIRED)
 
 file(GLOB_RECURSE SRCS "src/*.cpp")
@@ -112,6 +121,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   SDL3_ttf::SDL3_ttf
   SDL3_shadercross::SDL3_shadercross
   glm::glm
+  tinyobjloader
 )
 
 

@@ -1,13 +1,19 @@
 module;
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
+
 
 export module app;
 import std;
 
 const std::string FRAGMENT_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/fragment.spv";
 const std::string VERTEX_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/vertex.spv";
-const std::string TEXTURE_PATH = "/home/omathot/dev/cpp/bulb/assets/fern_red.png";
+const std::string TEXTURE_PATH = "/home/omathot/dev/cpp/bulb/assets/textures/fern_red.png";
+
+const std::string VIKING_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/viking_room.obj";
+const std::string VIKING_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/viking_room.png";
 
 constexpr std::uint32_t WINDOW_WIDTH = 800;
 constexpr std::uint32_t WINDOW_HEIGHT = 600;
@@ -23,18 +29,20 @@ struct Vertex {
 	glm::vec3 pos;
 	glm::vec3 color;
 	glm::vec2 uv;
-};
 
-// Y up
-// "Ground" is XZ
-const std::vector<Vertex> vertices = {
-    {.pos={-0.5f, 0.0f, -0.5f}, .color={1.0f, 0.0f, 0.0f}, .uv = {1.0f, 0.0f}},
-    {.pos={0.5f, 0.0f, -0.5f}, .color={0.0f, 1.0f, 0.0f}, .uv = {0.0f, 0.0f,}},
-    {.pos={0.5f, 0.0f, 0.5f}, .color={0.0f, 0.0f, 1.0f}, .uv = {0.0f, 1.0f,}},
-    {.pos={-0.5f, 0.0f, 0.5f}, .color={1.0f, 1.0f, 1.0}, .uv = {1.0f, 1.0f}}
+	bool operator==(const Vertex &other) const {
+		return pos == other.pos &&
+			color == other.color &&
+			uv == other.uv;
+	}
 };
-const std::vector<std::uint16_t> indices = {
-    0, 1, 2, 2, 3, 0
+template <>
+struct std::hash<Vertex> {
+	size_t operator()(Vertex const &vertex) const noexcept {
+		return ((hash<glm::vec3>()(vertex.pos) ^
+				(hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
+				(hash<glm::vec2>()(vertex.uv) << 1);
+	}
 };
 
 struct UniformBuffer {
@@ -46,13 +54,15 @@ struct UniformBuffer {
 struct Controller {
 	glm::vec3 _pos{{}};
 	float _angle = 0;
-	std::uint32_t _speed = 7;
+	std::uint32_t _speed = 5;
+	std::uint32_t _rot_speed = 50;
 	bool move_left = false;
 	bool move_right = false;
 	bool move_further = false;
 	bool move_closer = false;
 	bool move_up = false;
 	bool move_down = false;
+	bool pause = false;
 };
 
 struct Texture {
@@ -87,10 +97,13 @@ private:
 	SDL_Window* _window = nullptr;
 	SDL_GPUDevice* _device = nullptr;
 
+	std::unique_ptr<TextureManager> _texture_manager;
+	SDL_GPUTexture* _depth_texture = nullptr;
+
+	std::vector<Vertex> _vertices;
+	std::vector<std::uint32_t> _indices;
 	SDL_GPUBuffer* _vertex_buff = nullptr;
 	SDL_GPUBuffer* _index_buff = nullptr;
-	std::unique_ptr<TextureManager> _texture_manager;
-	// SDL_GPUTexture* _texture = nullptr;
 
 	SDL_GPUGraphicsPipeline* _graphics_pipeline = nullptr;
 	SDL_GPUSampler* _sampler = nullptr;
@@ -101,6 +114,7 @@ private:
 	void set_window(SDL_Window* window);
 	void set_device(SDL_GPUDevice* device);
 	void setup_gpu_resources();
+	void load_model();
 	void terminate();
 	[[nodiscard]] bool should_exit() const;
 };
