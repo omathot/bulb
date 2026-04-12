@@ -11,7 +11,7 @@ module;
 module app;
 import std;
 
-[[nodiscard]] static std::vector<char> read_file(const std::string& filename);
+[[nodiscard]] static std::vector<char> read_file(const std::filesystem::path& filename);
 [[nodiscard]] constexpr std::uint32_t make_vk_version(uint32_t major, uint32_t minor, uint32_t patch);
 
 App::App() {
@@ -547,7 +547,7 @@ void App::cleanup() {
 	SDL_Quit();
 }
 
-[[nodiscard]] static std::vector<char> read_file(const std::string& filename) {
+[[nodiscard]] static std::vector<char> read_file(const std::filesystem::path& filename) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
 	if (!file.is_open())

@@ -8,17 +8,17 @@ module;
 export module app;
 import std;
 
-const std::string FRAGMENT_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/fragment.spv";
-const std::string VERTEX_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/vertex.spv";
+constexpr std::string_view FRAGMENT_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/fragment.spv";
+constexpr std::string_view VERTEX_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/vertex.spv";
 
-const std::string VIKING_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/viking_room.obj";
-const std::string VIKING_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/viking_room.png";
+constexpr std::string_view VIKING_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/viking_room.obj";
+constexpr std::string_view VIKING_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/viking_room.png";
 
-const std::string TITANIC_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/Titanic.obj";
-const std::string TITANIC_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/Titanic.jpeg";
+constexpr std::string_view TITANIC_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/Titanic.obj";
+constexpr std::string_view TITANIC_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/Titanic.jpeg";
 
-const std::string MINECRAFT_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/minecraft_castle.obj";
-const std::string MINECRAFT_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/minecraft_castle.jpg";
+constexpr std::string_view MINECRAFT_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/minecraft_castle.obj";
+constexpr std::string_view MINECRAFT_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/minecraft_castle.jpg";
 
 constexpr std::uint32_t WINDOW_WIDTH = 800;
 constexpr std::uint32_t WINDOW_HEIGHT = 600;
@@ -36,7 +36,7 @@ struct Vertex {
 	glm::vec2 uv;
 	glm::vec3 normal;
 
-	bool operator==(const Vertex &other) const {
+	constexpr bool operator==(const Vertex &other) const {
 		return pos == other.pos &&
 			color == other.color &&
 			uv == other.uv &&
@@ -44,7 +44,7 @@ struct Vertex {
 	}
 };
 // 0x9e3779b9 magic constant is from golden ratio? apparently spreads bits well and avoids collision issues.
-inline void hash_combine(size_t& seed, size_t hash) {
+constexpr void hash_combine(size_t& seed, size_t hash) {
 	seed ^= hash + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 template <>
@@ -145,6 +145,10 @@ enum class ScaleRequest : std::uint8_t {
 	unknown,
 };
 
+struct AppContext {
+
+};
+
 export class App {
 public:
 	App();
@@ -181,12 +185,15 @@ private:
 	ModelRequest _model_request = ModelRequest::unknown;
 	ScaleRequest _scale_request = ScaleRequest::unknown;
 
+	// maintenance
 	void set_window(SDL_Window* window);
 	void set_device(SDL_GPUDevice* device);
-	void setup_gpu_resources();
-	void load_model();
 	void terminate();
 	[[nodiscard]] bool should_exit() const;
+
+	// actually do stuff
+	void setup_gpu_resources();
+	void load_model();
 };
 
 // suppressing system/driver leaks
