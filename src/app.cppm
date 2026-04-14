@@ -34,6 +34,15 @@ constexpr std::uint32_t WINDOW_HEIGHT = 600;
 	constexpr bool enable_debug = true;
 #endif
 
+// Resources to learn about PBR
+// https://marmoset.co/posts/physically-based-rendering-and-you-can-too/#albedo
+// https://dl.acm.org/doi/10.1145/192161.192286
+// https://marmoset.co/posts/basic-theory-of-physically-based-rendering/
+// https://pbr-book.org/4ed/contents
+struct PBRMaterial {
+
+};
+
 struct ModelConfig {
 	std::string model_path;
 	std::string basedir;
@@ -68,7 +77,6 @@ struct std::hash<Vertex> {
 		return h;
 	}
 };
-
 
 struct UniformBuffer {
 	glm::mat4 model;
@@ -114,7 +122,7 @@ struct SubMesh {
 	Texture* texture = nullptr;
 };
 
-export class TextureManager {
+class TextureManager {
 public:
 	explicit TextureManager(SDL_GPUDevice* device);
 	Texture* load(const std::string& path);
