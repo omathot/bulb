@@ -8,11 +8,16 @@ module;
 export module app;
 import std;
 
+constexpr std::string_view MODELS_BASEDIR = "/home/omathot/dev/cpp/bulb/assets/models/";
+constexpr std::string_view RANGER_BASEDIR = "/home/omathot/dev/cpp/bulb/assets/Black Ranger/";
+
 constexpr std::string_view FRAGMENT_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/fragment.spv";
 constexpr std::string_view VERTEX_SHADER_PATH = "/home/omathot/dev/cpp/bulb/shaders/vertex.spv";
 
 constexpr std::string_view VIKING_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/viking_room.obj";
 constexpr std::string_view VIKING_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/viking_room.png";
+
+constexpr std::string_view RANGER_MODEL = "/home/omathot/dev/cpp/bulb/assets/Black Ranger/RngM_S01_T1_black_msh.obj";
 
 constexpr std::string_view TITANIC_MODEL = "/home/omathot/dev/cpp/bulb/assets/models/Titanic.obj";
 constexpr std::string_view TITANIC_TEXTURE = "/home/omathot/dev/cpp/bulb/assets/textures/Titanic.jpeg";
@@ -29,6 +34,11 @@ constexpr std::uint32_t WINDOW_HEIGHT = 600;
 	constexpr bool enable_debug = true;
 #endif
 
+struct ModelConfig {
+	std::string model_path;
+	std::string basedir;
+	std::string fallback_texture_path;
+};
 
 struct Vertex {
 	glm::vec3 pos;
@@ -58,6 +68,7 @@ struct std::hash<Vertex> {
 		return h;
 	}
 };
+
 
 struct UniformBuffer {
 	glm::mat4 model;
@@ -90,6 +101,17 @@ struct Texture {
 	Controller _controller{};
 
 	Texture(SDL_GPUTexture* texture) : _data(texture) {}
+};
+
+// https://stackoverflow.com/questions/12454403/how-do-meshes-sub-meshes-materials-sub-materials-textures-all-relate-to-each
+// keeps a ref to texture that texeturemanager manages lifetime of
+// NOTE: TextureManager must always outlive all SubMeshes
+struct SubMesh {
+	std::vector<Vertex> vertices;
+	std::vector<std::uint32_t> indices;
+	SDL_GPUBuffer* vertex_buff = nullptr;
+	SDL_GPUBuffer* index_buff = nullptr;
+	Texture* texture = nullptr;
 };
 
 export class TextureManager {
@@ -137,6 +159,7 @@ enum class ModelRequest : std::uint8_t {
 	minecraft,
 	titanic,
 	viking,
+	ranger,
 	unknown,
 };
 enum class ScaleRequest : std::uint8_t {
@@ -166,10 +189,11 @@ private:
 	std::unique_ptr<TextureManager> _texture_manager;
 	SDL_GPUTexture* _depth_texture = nullptr;
 
-	std::vector<Vertex> _vertices;
-	std::vector<std::uint32_t> _indices;
-	SDL_GPUBuffer* _vertex_buff = nullptr;
-	SDL_GPUBuffer* _index_buff = nullptr;
+	// std::vector<Vertex> _vertices;
+	// std::vector<std::uint32_t> _indices;
+	// SDL_GPUBuffer* _vertex_buff = nullptr;
+	// SDL_GPUBuffer* _index_buff = nullptr;
+	std::vector<SubMesh> _submeshes;
 
 	SDL_GPUGraphicsPipeline* _graphics_pipeline = nullptr;
 	SDL_GPUGraphicsPipeline* _wireframe_pipeline = nullptr;
@@ -192,6 +216,7 @@ private:
 	[[nodiscard]] bool should_exit() const;
 
 	// actually do stuff
+	[[nodiscard]] ModelConfig get_model_config() const;
 	void setup_gpu_resources();
 	void load_model();
 };

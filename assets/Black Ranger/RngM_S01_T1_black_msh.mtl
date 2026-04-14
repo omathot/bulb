@@ -1,0 +1,40 @@
+# Wavefront .mtl file  -  created by SpaceDraw
+
+# File created: 21-07-10, 23:13
+
+newmtl RngM_S01_T1_black_axe_D
+Ns 20.0
+d 1.0
+Tr 0.0
+illum 2
+Ka 0.50189996 0.50189996 0.50189996 
+Kd 0.50189996 0.50189996 0.50189996 
+Ks 0.50189996 0.50189996 0.50189996 
+Ke 0.50189996 0.50189996 0.50189996 
+map_Ka RngM_S01_T1_black_axe_D.png
+map_Kd RngM_S01_T1_black_axe_D.png
+
+newmtl RngM_S01_T1_red_gun_D
+Ns 20.0
+d 1.0
+Tr 0.0
+illum 2
+Ka 0.50189996 0.50189996 0.50189996 
+Kd 0.50189996 0.50189996 0.50189996 
+Ks 0.50189996 0.50189996 0.50189996 
+Ke 0.50189996 0.50189996 0.50189996 
+map_Ka RngM_S01_T1_red_gun_D.png
+map_Kd RngM_S01_T1_red_gun_D.png
+
+newmtl RngM_S01_T1_black_D
+Ns 20.0
+d 1.0
+Tr 0.0
+illum 2
+Ka 0.50189996 0.50189996 0.50189996 
+Kd 0.50189996 0.50189996 0.50189996 
+Ks 0.50189996 0.50189996 0.50189996 
+Ke 0.50189996 0.50189996 0.50189996 
+map_Ka RngM_S01_T1_black_D.png
+map_Kd RngM_S01_T1_black_D.png
+

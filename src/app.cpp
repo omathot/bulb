@@ -12,7 +12,8 @@ module app;
 import std;
 
 [[nodiscard]] static std::vector<char> read_file(const std::filesystem::path& filename);
-[[nodiscard]] constexpr std::uint32_t make_vk_version(uint32_t major, uint32_t minor, uint32_t patch);
+[[nodiscard]] static constexpr std::uint32_t make_vk_version(uint32_t major, uint32_t minor, uint32_t patch);
+[[nodiscard]] static Vertex build_vertex(const tinyobj::attrib_t& attrib, const tinyobj::index_t& idx);
 
 App::App() {
 	if (enable_debug)
@@ -60,22 +61,6 @@ void App::init() {
 }
 
 void App::setup_gpu_resources() {
-	std::string texture_path;
-	switch (_model_request) {
-		case ModelRequest::minecraft:
-			texture_path = MINECRAFT_TEXTURE;
-			break;
-		case ModelRequest::titanic:
-			texture_path = TITANIC_TEXTURE;
-			break;
-		case ModelRequest::viking:
-			texture_path = VIKING_TEXTURE;
-			break;
-		case ModelRequest::unknown:
-			texture_path = TITANIC_TEXTURE;
-			break;
-	}
-	_texture_manager->load(texture_path);
 	load_model();
 	// sampler
 	SDL_GPUSamplerCreateInfo sampler_info {
@@ -222,70 +207,69 @@ void App::setup_gpu_resources() {
 	SDL_ReleaseGPUShader(_device, frag_shader);
 	SDL_ReleaseGPUShader(_device, vert_shader);
 
-	// buffers
-	std::uint32_t vertex_size = static_cast<Uint32>(_vertices.size() * sizeof(Vertex));
-	std::uint32_t index_size = static_cast<Uint32>(_indices.size() * sizeof(std::uint32_t));
-	SDL_GPUBufferCreateInfo vertexInfo {
-		.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-		.size = vertex_size,
-		.props = 0,
-	};
-	auto* vertex_buff = SDL_CreateGPUBuffer(_device, &vertexInfo);
-	SDL_GPUBufferCreateInfo index_info {
-		.usage = SDL_GPU_BUFFERUSAGE_INDEX,
-		.size = index_size,
-		.props = 0
-	};
-	auto* index_buff = SDL_CreateGPUBuffer(_device, &index_info);
-	SDL_GPUTransferBufferCreateInfo transfer_info {
-		.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-		.size = vertex_size + index_size,
-		.props = 0,
-	};
-	auto* transfer_buff = SDL_CreateGPUTransferBuffer(_device, &transfer_info);
-	auto* data = static_cast<std::uint8_t*>(SDL_MapGPUTransferBuffer(_device, transfer_buff, false));
-	if (!data) {
-		SDL_Log("Failed to map TransferBuffer: %s", SDL_GetError());
+	// upload buffers per submesh
+	for (auto& sub: _submeshes) {
+		std::uint32_t vertex_size = static_cast<Uint32>(sub.vertices.size() * sizeof(Vertex));
+		std::uint32_t index_size = static_cast<Uint32>(sub.indices.size() * sizeof(std::uint32_t));
+		SDL_GPUBufferCreateInfo vertexInfo {
+			.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+			.size = vertex_size,
+			.props = 0,
+		};
+		sub.vertex_buff = SDL_CreateGPUBuffer(_device, &vertexInfo);
+		SDL_GPUBufferCreateInfo index_info {
+			.usage = SDL_GPU_BUFFERUSAGE_INDEX,
+			.size = index_size,
+			.props = 0
+		};
+		sub.index_buff = SDL_CreateGPUBuffer(_device, &index_info);
+		SDL_GPUTransferBufferCreateInfo transfer_info {
+			.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+			.size = vertex_size + index_size,
+			.props = 0,
+		};
+		auto* transfer_buff = SDL_CreateGPUTransferBuffer(_device, &transfer_info);
+		auto* data = static_cast<std::uint8_t*>(SDL_MapGPUTransferBuffer(_device, transfer_buff, false));
+		if (!data) {
+			SDL_Log("Failed to map TransferBuffer: %s", SDL_GetError());
+			SDL_ReleaseGPUTransferBuffer(_device, transfer_buff);
+			return;
+		}
+		SDL_memcpy(data, sub.vertices.data(), vertex_size);
+		SDL_memcpy(data + vertex_size, sub.indices.data(), index_size);
+		SDL_UnmapGPUTransferBuffer(_device, transfer_buff);
+
+		auto* cmd_buff = SDL_AcquireGPUCommandBuffer(_device);
+		auto* copy_pass = SDL_BeginGPUCopyPass(cmd_buff);
+
+		// upload vertices
+		SDL_GPUTransferBufferLocation vertex_src {
+			.transfer_buffer = transfer_buff,
+			.offset = 0,
+		};
+		SDL_GPUBufferRegion vertex_dst {
+			.buffer = sub.vertex_buff,
+			.offset = 0,
+			.size = vertex_size,
+		};
+		SDL_UploadToGPUBuffer(copy_pass, &vertex_src, &vertex_dst, false);
+
+		// upload indices
+		SDL_GPUTransferBufferLocation index_src {
+			.transfer_buffer = transfer_buff,
+			.offset = vertex_size,
+		};
+		SDL_GPUBufferRegion index_dst {
+			.buffer = sub.index_buff,
+			.offset = 0,
+			.size = index_size
+		};
+		SDL_UploadToGPUBuffer(copy_pass, &index_src, &index_dst, false);
+
+		SDL_EndGPUCopyPass(copy_pass);
+		SDL_SubmitGPUCommandBuffer(cmd_buff);
 		SDL_ReleaseGPUTransferBuffer(_device, transfer_buff);
-		return;
 	}
-	SDL_memcpy(data, _vertices.data(), vertex_size);
-	SDL_memcpy(data + vertex_size, _indices.data(), index_size);
-	SDL_UnmapGPUTransferBuffer(_device, transfer_buff);
-
-	auto* cmd_buff = SDL_AcquireGPUCommandBuffer(_device);
-	auto* copy_pass = SDL_BeginGPUCopyPass(cmd_buff);
-
-	// upload vertices
-	SDL_GPUTransferBufferLocation vertex_src {
-		.transfer_buffer = transfer_buff,
-		.offset = 0,
-	};
-	SDL_GPUBufferRegion vertex_dst {
-		.buffer = vertex_buff,
-		.offset = 0,
-		.size = vertex_size,
-	};
-	SDL_UploadToGPUBuffer(copy_pass, &vertex_src, &vertex_dst, false);
-
-	// upload indices
-	SDL_GPUTransferBufferLocation index_src {
-		.transfer_buffer = transfer_buff,
-		.offset = vertex_size,
-	};
-	SDL_GPUBufferRegion index_dst {
-		.buffer = index_buff,
-		.offset = 0,
-		.size = index_size
-	};
-	SDL_UploadToGPUBuffer(copy_pass, &index_src, &index_dst, false);
-
-	SDL_EndGPUCopyPass(copy_pass);
-	SDL_SubmitGPUCommandBuffer(cmd_buff);
-	SDL_ReleaseGPUTransferBuffer(_device, transfer_buff);
-
-	_vertex_buff = vertex_buff;
-	_index_buff = index_buff;
 }
 
 SDL_AppResult App::iterate() {
@@ -375,32 +359,27 @@ SDL_AppResult App::iterate() {
 	SDL_PushGPUFragmentUniformData(cmd_buff, 0, &light_data, sizeof(light_data));
 
 	// bindings
-	SDL_GPUBufferBinding index_binding {
-		.buffer = _index_buff,
-		.offset = 0,
-	};
-	SDL_GPUBufferBinding vertex_binding {
-		.buffer = _vertex_buff,
-		.offset = 0,
-	};
-	SDL_GPUTextureSamplerBinding sampler_binding {
-		.texture = _texture_manager->get_tex()->_data,
-		.sampler = _sampler,
-	};
-	if (_wireframe)
+	for (const auto& sub: _submeshes) {
+		SDL_GPUBufferBinding index_binding {
+			.buffer = sub.index_buff,
+			.offset = 0,
+		};
+		SDL_GPUBufferBinding vertex_binding {
+			.buffer = sub.vertex_buff,
+			.offset = 0,
+		};
+		SDL_GPUTextureSamplerBinding sampler_binding {
+			.texture = _texture_manager->get_tex()->_data,
+			.sampler = _sampler,
+		};
 		SDL_BindGPUIndexBuffer(render_pass, &index_binding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-	SDL_BindGPUIndexBuffer(render_pass, &index_binding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-	if (_wireframe)
 		SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_binding, 1);
-	SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_binding, 1);
-	if (_wireframe)
 		SDL_BindGPUFragmentSamplers(render_pass, 0, &sampler_binding, 1);
-	SDL_BindGPUFragmentSamplers(render_pass, 0, &sampler_binding, 1);
+		// draw
+		SDL_DrawGPUIndexedPrimitives(render_pass, static_cast<std::uint32_t>(sub.indices.size()), 1, 0, 0, 0);
+	}
 
-	// draw
-	SDL_DrawGPUIndexedPrimitives(render_pass, static_cast<std::uint32_t>(_indices.size()), 1, 0, 0, 0);
 	SDL_EndGPURenderPass(render_pass);
-
 	SDL_SubmitGPUCommandBuffer(cmd_buff);
 
 	return SDL_APP_CONTINUE;
@@ -434,11 +413,7 @@ SDL_AppResult App::handle_event(SDL_Event* event) {
 				break;
 			_camera->_yaw += event->motion.xrel * _camera->_sensitivity;
 			_camera->_pitch -= event->motion.yrel * _camera->_sensitivity;
-			// clamp
-			if (_camera->_pitch > 89.0f) // NOLINT
-				_camera->_pitch = 89.0f;
-			if (_camera->_pitch < -89.0f) // NOLINT
-				_camera->_pitch = -89.0f;
+			_camera->_pitch = std::clamp(_camera->_pitch, -89.0f, 89.0f);
 			break;
 		case SDL_EVENT_KEY_DOWN:
 			switch (event->key.key) {
@@ -533,10 +508,13 @@ bool App::should_exit() const {
 }
 
 void App::cleanup() {
+	for (auto& sub: _submeshes) {
+		SDL_ReleaseGPUBuffer(_device, sub.vertex_buff);
+		SDL_ReleaseGPUBuffer(_device, sub.index_buff);
+	}
 	_texture_manager->cleanup();
 	SDL_ReleaseGPUTexture(_device, _depth_texture);
-	SDL_ReleaseGPUBuffer(_device, _vertex_buff);
-	SDL_ReleaseGPUBuffer(_device, _index_buff);
+
 	SDL_ReleaseGPUSampler(_device, _sampler);
 	SDL_ReleaseGPUGraphicsPipeline(_device, _graphics_pipeline);
 	SDL_ReleaseGPUGraphicsPipeline(_device, _wireframe_pipeline);
@@ -547,86 +525,59 @@ void App::cleanup() {
 	SDL_Quit();
 }
 
-[[nodiscard]] static std::vector<char> read_file(const std::filesystem::path& filename) {
-	std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-	if (!file.is_open())
-		throw std::runtime_error("failed to open file");
-
-	std::vector<char> buffer(static_cast<unsigned long>(file.tellg()));
-	file.seekg(0, std::ios::beg);
-	file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-	file.close();
-	return buffer;
-}
-
-[[nodiscard]] constexpr std::uint32_t make_vk_version(uint32_t major, uint32_t minor, uint32_t patch) {
-	return (major << 22) | (minor << 12) | patch;
-}
 
 void App::load_model() {
 	tinyobj::attrib_t attrib;
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
 	std::string warn, err;
-	std::string basedir = "/home/omathot/dev/cpp/bulb/assets/models";
 
-	std::string model_path;
-	switch (_model_request) {
-		case ModelRequest::minecraft:
-			model_path = MINECRAFT_MODEL;
-			break;
-		case ModelRequest::titanic:
-			model_path = TITANIC_MODEL;
-			break;
-		case ModelRequest::viking:
-			model_path = VIKING_MODEL;
-			break;
-		case ModelRequest::unknown:
-			model_path = TITANIC_MODEL;
-			break;
-	}
+	auto [model_path, basedir, fallback_texture] = get_model_config();
 	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, model_path.c_str(), basedir.c_str()))
 		throw std::runtime_error(warn + err);
 
-	std::unordered_map<Vertex, std::uint32_t> unique_vertices;
-	for (const auto& shape: shapes) {
-		for (const auto& idx: shape.mesh.indices) {
-			Vertex vertex{};
-			vertex.pos = {
-				attrib.vertices[(3 * static_cast<ulong>(idx.vertex_index)) + 0],
-				attrib.vertices[(3 * static_cast<ulong>(idx.vertex_index)) + 1],
-				attrib.vertices[(3 * static_cast<ulong>(idx.vertex_index)) + 2]
-			};
-			if (idx.texcoord_index >= 0) {
-				vertex.uv = {
-					attrib.texcoords[(2 * static_cast<ulong>(idx.texcoord_index)) + 0],
-					1.0f - attrib.texcoords[(2 * static_cast<ulong>(idx.texcoord_index)) + 1]
-				};
-			} else {
-				vertex.uv = {0.0f, 0.0f};
-			}
-			vertex.color = {1.0f, 1.0f, 1.0f};
-
-			if (idx.normal_index >= 0) {
-				vertex.normal = {
-					attrib.normals[(3 * static_cast<ulong>(idx.normal_index)) + 0],
-					attrib.normals[(3 * static_cast<ulong>(idx.normal_index)) + 1],
-					attrib.normals[(3 * static_cast<ulong>(idx.normal_index)) + 2],
-				};
-			} else {
-				vertex.normal = {0.0f, 1.0f, 0.0f};
-			}
-
-			if (!unique_vertices.contains(vertex)) {
-				unique_vertices[vertex] = static_cast<std::uint32_t>(_vertices.size());
-				_vertices.push_back(vertex);
-			}
-			// if already seen index to it with vertex
-			_indices.push_back(unique_vertices[vertex]);
+	if (materials.empty() && !fallback_texture.empty()) {
+		// single submesh, single texture
+		_submeshes.resize(1);
+		_submeshes[0].texture = _texture_manager->load(fallback_texture);
+	}
+	else {
+		_submeshes.resize(materials.size());
+		// load textures per material
+		for (size_t i = 0; i < materials.size(); i++) {
+			if (!materials[i].diffuse_texname.empty())
+				_submeshes[i].texture = _texture_manager->load(basedir + materials[i].diffuse_texname);
 		}
 	}
-	std::cout << "Successfully loaded model, uniquevertices = " << _vertices.size() << '\n';
+
+	std::vector<std::unordered_map<Vertex, std::uint32_t>> unique_vertices(materials.size());
+	for (const auto& shape : shapes) {
+		size_t index_offset = 0;
+		for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++) {
+			int mat_id = materials.empty() ? 0 : shape.mesh.material_ids[f];
+			mat_id = std::max(mat_id, 0);
+			auto& sub = _submeshes[static_cast<ulong>(mat_id)];
+			auto& unique = unique_vertices[static_cast<ulong>(mat_id)];
+
+			for (int v = 0; v < 3; v++) {
+				auto idx = shape.mesh.indices[index_offset + static_cast<ulong>(v)];
+				Vertex vertex = build_vertex(attrib, idx);
+				if (!unique.contains(vertex)) {
+					unique[vertex] = static_cast<std::uint32_t>(sub.vertices.size());
+					sub.vertices.push_back(vertex);
+				}
+				// if already seen index to it with vertex
+				sub.indices.push_back(unique[vertex]);
+			}
+			index_offset += 3;
+		}
+	}
+
+	size_t total_verts = 0;
+	for (auto& sub : _submeshes)
+		total_verts += sub.vertices.size();
+
+	std::cout << "Successfully loaded model, " << _submeshes.size() << " submeshes, " << total_verts << " unique vertices\n";
 }
 
 // overly lenient and no checking for now.
@@ -645,6 +596,10 @@ void App::arguments(int argc, char** argv) {
 			SDL_Log("Request titanic");
 			_model_request = ModelRequest::titanic;
 		}
+		else if (request.contains("ranger")) {
+			SDL_Log("Request Power Ranger");
+			_model_request = ModelRequest::ranger;
+		}
 		else if (request.contains("scaled_down")) {
 			SDL_Log("requested scaled down");
 			_scale_request = ScaleRequest::scaled_down;
@@ -658,4 +613,85 @@ void App::arguments(int argc, char** argv) {
 		}
 	}
 
+}
+
+[[nodiscard]] ModelConfig App::get_model_config() const {
+	switch (_model_request) {
+		case ModelRequest::viking:
+			return {
+				.model_path = std::string(VIKING_MODEL),
+				.basedir = std::string(MODELS_BASEDIR),
+				.fallback_texture_path = std::string(VIKING_TEXTURE)
+			};
+		case ModelRequest::titanic:
+			return {
+				.model_path = std::string(TITANIC_MODEL),
+				.basedir =  std::string(MODELS_BASEDIR),
+				.fallback_texture_path = std::string(TITANIC_TEXTURE)
+			};
+		case ModelRequest::ranger:
+			return {
+				.model_path = std::string(RANGER_MODEL),
+				.basedir = std::string(RANGER_BASEDIR),
+				.fallback_texture_path = ""
+			};
+		case ModelRequest::minecraft:
+			return {
+				.model_path = std::string(MINECRAFT_MODEL),
+				.basedir = std::string(MODELS_BASEDIR),
+				.fallback_texture_path =  std::string(MINECRAFT_TEXTURE)
+			};
+		default:
+			return {
+				.model_path = std::string(RANGER_MODEL),
+				.basedir = std::string(RANGER_BASEDIR),
+				.fallback_texture_path = ""
+			};
+	}
+}
+
+// utils
+[[nodiscard]] static std::vector<char> read_file(const std::filesystem::path& filename) {
+	std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open())
+		throw std::runtime_error("failed to open file");
+
+	std::vector<char> buffer(static_cast<unsigned long>(file.tellg()));
+	file.seekg(0, std::ios::beg);
+	file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+	file.close();
+	return buffer;
+}
+
+[[nodiscard]] static constexpr std::uint32_t make_vk_version(uint32_t major, uint32_t minor, uint32_t patch) {
+	return (major << 22) | (minor << 12) | patch;
+}
+
+[[nodiscard]] static Vertex build_vertex(const tinyobj::attrib_t& attrib, const tinyobj::index_t& idx) {
+	Vertex vertex{};
+	vertex.pos = {
+		attrib.vertices[(3 * static_cast<ulong>(idx.vertex_index)) + 0],
+		attrib.vertices[(3 * static_cast<ulong>(idx.vertex_index)) + 1],
+		attrib.vertices[(3 * static_cast<ulong>(idx.vertex_index)) + 2]
+	};
+	if (idx.texcoord_index >= 0) {
+		vertex.uv = {
+			attrib.texcoords[(2 * static_cast<ulong>(idx.texcoord_index)) + 0],
+			1.0f - attrib.texcoords[(2 * static_cast<ulong>(idx.texcoord_index)) + 1]
+		};
+	} else {
+		vertex.uv = {0.0f, 0.0f};
+	}
+	vertex.color = {1.0f, 1.0f, 1.0f};
+	if (idx.normal_index >= 0) {
+		vertex.normal = {
+			attrib.normals[(3 * static_cast<ulong>(idx.normal_index)) + 0],
+			attrib.normals[(3 * static_cast<ulong>(idx.normal_index)) + 1],
+			attrib.normals[(3 * static_cast<ulong>(idx.normal_index)) + 2]
+		};
+	} else {
+		vertex.normal = {0.0f, 1.0f, 0.0f};
+	}
+	return vertex;
 }
